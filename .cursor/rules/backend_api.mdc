@@ -1,0 +1,13 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Backend API Structure
+
+The backend API uses Vercel Serverless Functions. Each file within the top-level `api/` directory corresponds to an API endpoint.
+
+- Authentication is handled by [api/login.ts](mdc:api/login.ts), which verifies a master password and issues JWTs.
+- Deck-related endpoints are organized under [api/decks/](mdc:api/decks). For example, [api/decks/index.ts](mdc:api/decks/index.ts) handles fetching all decks and creating new ones.
+- Dynamic routes like `[deckId]` are used for specific resource operations.
+- These functions often interact with the database using the Drizzle client defined in [src/db/index.ts](mdc:src/db/index.ts).

@@ -1,0 +1,19 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+
+# Database Setup (PostgreSQL + Drizzle)
+
+This project uses a PostgreSQL database for data persistence.
+
+- **Local Development:** A PostgreSQL instance is managed via Docker Compose, configured in [docker-compose.yml](mdc:docker-compose.yml). Database data is persisted locally in the `postgres-data` directory (ignored by git).
+- **ORM:** [Drizzle ORM](mdc:https:/orm.drizzle.team) is used to interact with the database.
+- **Schema:** The database table structures (e.g., `decks`, `cards`) are defined in [src/db/schema.ts](mdc:src/db/schema.ts).
+- **Client:** The Drizzle client instance, connecting to the database using the `DATABASE_URL` environment variable, is configured in [src/db/index.ts](mdc:src/db/index.ts).
+- **Migrations:** Database schema changes are managed using Drizzle Kit. The configuration is in [drizzle.config.ts](mdc:drizzle.config.ts), and migrations are stored in the `drizzle/migrations` directory. Use `bun run generate` and `bun run migrate` to manage migrations.

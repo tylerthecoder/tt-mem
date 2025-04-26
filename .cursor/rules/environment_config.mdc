@@ -1,0 +1,14 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Environment Configuration
+
+This project relies on environment variables for configuration, particularly secrets.
+
+- **`.env` File:** Local development configuration and secrets (like database connection strings, JWT secrets, master password) are stored in the `.env` file at the project root. This file is **not** committed to git, as specified in [.gitignore](mdc:.gitignore).
+- **Template:** While `.env.example` may not exist, the required variables (`DATABASE_URL`, `JWT_SECRET`, `MASTER_PASSWORD`) are documented in the [README.md](mdc:README.md) setup section.
+- **Loading:** The `dotenv` package is used to load these variables into `process.env` within API routes and configuration files like [drizzle.config.ts](mdc:drizzle.config.ts).
+- **Docker:** The local database connection details in `.env` should correspond to the settings in [docker-compose.yml](mdc:docker-compose.yml).
+- **Vercel Deployment:** For deployment, these environment variables must be set directly in the Vercel project settings.
