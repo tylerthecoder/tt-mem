@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import dotenv from 'dotenv';
 import { sql } from '@vercel/postgres';
 import { authenticate } from '../_utils/auth';
-import type { Deck } from '../../types/index';
+import type { Deck } from 'types/index';
 
 dotenv.config();
 

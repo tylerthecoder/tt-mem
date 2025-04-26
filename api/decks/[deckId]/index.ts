@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import dotenv from 'dotenv';
 import { sql } from '@vercel/postgres'; // Import sql
 import { authenticate } from '../../_utils/auth'; // Relative path within /api is okay
-import type { Deck } from '../../types'; // Import Deck type from shared location
+import type { Deck } from 'types/index'; // Use absolute path from baseUrl
 // Removed Drizzle imports
 
 // Removed local Deck interface definition
@@ -66,8 +66,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
     }
 
-    // TODO: Implement DELETE /api/decks/{deckId}
+    // --- DELETE /api/decks/{deckId} --- Delete a deck
+    if (req.method === 'DELETE') {
+        const user = authenticate(req);
+        if (!user) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
 
-    res.setHeader('Allow', ['GET', 'PUT', 'PATCH']); // Add DELETE later
+        try {
+            const { rowCount } = await sql`
+                DELETE FROM decks
+                WHERE id = ${deckId};
+            `;
+
+            if (rowCount === 0) {
+                // If no rows were deleted, the deck ID likely didn't exist
+                return res.status(404).json({ message: 'Deck not found for deletion' });
+            }
+            // Successfully deleted
+            return res.status(204).end(); // 204 No Content is standard for successful DELETE
+        } catch (error) {
+            console.error(`Error deleting deck ${deckId}:`, error);
+            // TODO: Handle potential foreign key constraint errors if cards depend on decks
+            return res.status(500).json({ message: 'Failed to delete deck' });
+        }
+    }
+
+    res.setHeader('Allow', ['GET', 'PUT', 'PATCH', 'DELETE']); // Add DELETE to allowed methods
     return res.status(405).end(`Method ${req.method} Not Allowed`);
 }

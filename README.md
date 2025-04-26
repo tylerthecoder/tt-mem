@@ -35,9 +35,7 @@
 - **Frontend:** Vite + React + TypeScript
 - **Styling:** Tailwind CSS
 - **API:** Vercel Serverless Functions
-- **Database:** PostgreSQL
-- **ORM:** Drizzle ORM
-- **DB Migrations:** Drizzle Kit
+- **Database:** PostgreSQL + Vercel Postgres SDK (`@vercel/postgres`)
 - **Server State Syncing:** Tanstack Query (React Query)
 - **Routing (Client):** React Router
 - **Local DB:** Docker Compose
@@ -53,7 +51,8 @@
 ## Database
 
 - **Postgres** database.
-- **ORM:** Drizzle ORM used for schema definition (`src/db/schema.ts`), queries, and migrations.
+- **SDK:** The `@vercel/postgres` SDK is used for interacting with the database directly within the API routes.
+- **Schema:** Database tables (like `decks`, `cards`) are created and managed manually or via SQL scripts. There is no separate ORM schema definition file.
 - **Tables:**
   - `decks`: Stores deck information (id, name, etc.).
   - `cards`: Stores card information (id, deck_id, front_text, back_text, etc.).
@@ -95,16 +94,24 @@ All endpoints are prefixed with `/api`.
 ## Development Setup
 
 1. **Environment Variables:**
-    - Copy `.env.example` to `.env`.
-    - Fill in the required values, especially `POSTGRES_PASSWORD`, `JWT_SECRET`, and `MASTER_PASSWORD`.
+    - Create a `.env` file in the project root.
+    - Add the following variables:
+      ```
+      DATABASE_URL="postgresql://postgres:<YOUR_POSTGRES_PASSWORD>@localhost:5432/postgres?sslmode=disable"
+      JWT_SECRET="<YOUR_RANDOM_JWT_SECRET>"
+      MASTER_PASSWORD="<YOUR_CHOSEN_MASTER_PASSWORD>"
+      ```
+    - Replace `<YOUR_POSTGRES_PASSWORD>` with the password you set (or the default `postgres` if using the provided docker-compose).
+    - Replace `<YOUR_RANDOM_JWT_SECRET>` with a long, random, secure string.
+    - Replace `<YOUR_CHOSEN_MASTER_PASSWORD>` with the password you want to use for login.
+    - **Note:** The `DATABASE_URL` should match the configuration in `docker-compose.yml`.
 2. **Database:**
     - Ensure you have Docker installed and running.
     - Start the PostgreSQL container: `docker compose up -d`
+    - You may need to manually connect to the database (using a tool like `psql` or a GUI client) and create the necessary tables (`decks`, `cards`, etc.) based on the expected structure.
 3. **Install Dependencies:**
     - Run `bun install`
-4. **Database Migrations:**
-    - Generate migration files if you change `src/db/schema.ts`: `bun run generate`
-    - Apply migrations to the database: `bun run migrate`
+4. **Manual Schema Management:** Since Drizzle is not used, you need to manage database schema changes manually (e.g., using SQL scripts or a database GUI tool connected to the Docker container).
 5. **Run Development Server:**
     - Start the Vite dev server (includes frontend and API routes via Vercel CLI): `bun run dev`
     - The application should be available at `http://localhost:5173` (or the port specified by Vite/Vercel).

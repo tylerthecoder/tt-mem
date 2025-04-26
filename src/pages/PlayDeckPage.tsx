@@ -2,11 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Button from '../components/Button';
 import { useDeckCards } from '../hooks/queryHooks'; // Import the query hook
-import { ReviewResult } from '../../api/types'; // Update import path
+// import { ReviewResult } from '../types'; // Use inline type due to import issues
+
+// Inline types needed due to import issues / mock hook structure
+interface Card { // Keep Card because useDeckCards returns it, even if mock
+    id: string;
+    front_text: string;
+    back_text: string;
+}
+
+enum ReviewResult { // Define ReviewResult inline
+    EASY = "easy",
+    MEDIUM = "medium",
+    HARD = "hard",
+    MISSED = "missed",
+}
 
 const PlayDeckPage: React.FC = () => {
     const { deckId } = useParams<{ deckId: string }>();
-    const { data: cards, isLoading, error } = useDeckCards(deckId);
+    // Adjust type annotation based on mock hook's actual return { error: null }
+    const { data: cards, isLoading, error }: { data: Card[], isLoading: boolean, error: null } = useDeckCards(deckId);
 
     // Local state for UI interaction
     const [currentCardIndex, setCurrentCardIndex] = useState<number>(0);
@@ -27,7 +42,10 @@ const PlayDeckPage: React.FC = () => {
     const handleReview = (result: ReviewResult) => {
         if (!cards || cards.length === 0) return; // Guard against no cards
 
-        console.log(`Card ${cards[currentCardIndex].id} reviewed as: ${result}`);
+        // Need to ensure currentCardIndex is valid before accessing cards[currentCardIndex]
+        const safeIndex = currentCardIndex % cards.length;
+
+        console.log(`Card ${cards[safeIndex].id} reviewed as: ${result}`);
         // TODO: Record the ReviewEvent (client-side and maybe send to server)
         // TODO: Implement logic to determine the *next* card based on SRS algorithm
 
@@ -43,18 +61,25 @@ const PlayDeckPage: React.FC = () => {
     }
 
     // Handle Error State
+    // Since the mock hook always returns error: null, this block might not be hit
+    // unless the real hook implementation changes.
     if (error) {
-        return <div className="text-center text-red-500 dark:text-red-400">Error loading deck: {error.message}</div>;
-    }
+        // If error could potentially have a message in the future, type assertion might be needed
+        // const errorMessage = (error as any)?.message || 'An unknown error occurred';
+        // return <div className="text-center text-red-500 dark:text-red-400">Error loading deck: {errorMessage}</div>;
 
-    // Handle Empty Deck State (after loading)
-    if (!cards || cards.length === 0) {
-        return <div className="text-center text-gray-500 dark:text-gray-400">Deck is empty. <Link to={`/deck/${deckId}/edit`} className="text-primary underline">Add cards</Link></div>;
+        // For now, just indicate a generic error state if error is somehow not null
+        return <div className="text-center text-red-500 dark:text-red-400">An error occurred loading the deck.</div>;
     }
 
     // Ensure currentCardIndex is valid after potential data change
+    // Check if cards is not empty before calculating safe index
+    if (!cards || cards.length === 0) {
+        // Render empty/loading state (already handled above)
+        return <div className="text-center text-gray-500 dark:text-gray-400">Deck is empty or loading... <Link to={`/deck/${deckId}/edit`} className="text-primary underline">Add cards</Link></div>; // Adjusted message slightly
+    }
     const safeCurrentCardIndex = currentCardIndex % cards.length;
-    const currentCard = cards[safeCurrentCardIndex];
+    const currentCard = cards[safeCurrentCardIndex]; // Use safe index
 
     return (
         <div className="space-y-6">
@@ -70,9 +95,10 @@ const PlayDeckPage: React.FC = () => {
                     <h2 className="text-lg font-semibold text-gray-500 dark:text-gray-400 mb-4">
                         Card {safeCurrentCardIndex + 1} / {cards.length}
                     </h2>
-                    <p className="text-2xl font-medium mb-4 min-h-[3em]">{currentCard.front_text}</p>
+                    {/* Ensure currentCard is defined before accessing properties */}
+                    <p className="text-2xl font-medium mb-4 min-h-[3em]">{currentCard?.front_text}</p>
                     {showBack && (
-                        <p className="text-xl text-secondary min-h-[2.5em]">{currentCard.back_text}</p>
+                        <p className="text-xl text-secondary min-h-[2.5em]">{currentCard?.back_text}</p>
                     )}
                 </div>
 
