@@ -1,43 +1,26 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation'; // Use next hooks
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import Button from '@/components/Button'; // Use path alias
-import { useDeckCards } from '@/hooks/queryHooks'; // Use path alias
-// Remove old react-router imports
-// import { useParams, Link } from 'react-router-dom';
-// import Button from '../components/Button';
+import Button from '@/components/Button';
+import { useDeckCards, useCreateReviewEventMutation } from '@/hooks/queryHooks';
+import { ReviewResult } from '@/types';
+// import type { Card } from '@/types'; // Card is implicitly typed by useDeckCards
 
-// Inline types needed due to import issues / mock hook structure
-interface Card { // Keep Card because useDeckCards returns it, even if mock
-    id: string;
-    front_text: string;
-    back_text: string;
-}
-
-enum ReviewResult { // Define ReviewResult inline
-    EASY = "easy",
-    MEDIUM = "medium",
-    HARD = "hard",
-    MISSED = "missed",
-}
-
-export default function PlayDeckPage() { // Rename component
+export default function PlayDeckPage() {
     const params = useParams();
     const deckId = typeof params?.deckId === 'string' ? params.deckId : undefined;
 
-    // Fetch cards (currently mock)
-    // Only fetch if deckId is valid
-    const { data: cards, isLoading, error }: { data: Card[], isLoading: boolean, error: null } = useDeckCards(deckId);
+    const { data: cards, isLoading, error } = useDeckCards(deckId);
+    const createReviewMutation = useCreateReviewEventMutation();
 
-    // Local state for UI interaction
     const [currentCardIndex, setCurrentCardIndex] = useState<number>(0);
     const [showBack, setShowBack] = useState<boolean>(false);
 
-    // Reset card index and visibility when cards data changes (e.g., on initial load or refetch)
     useEffect(() => {
         if (cards && cards.length > 0) {
+            // Reset index if cards data changes (e.g., on initial load)
             setCurrentCardIndex(0);
             setShowBack(false);
         }
@@ -48,45 +31,66 @@ export default function PlayDeckPage() { // Rename component
     };
 
     const handleReview = (result: ReviewResult) => {
-        if (!cards || cards.length === 0 || deckId === undefined) return;
-        const safeIndex = currentCardIndex % cards.length;
-        console.log(`Card ${cards[safeIndex].id} reviewed as: ${result}`);
-        // TODO: Call server action to record review event
+        if (!cards || cards.length === 0 || deckId === undefined || createReviewMutation.isPending) return;
+        const safeIndex = currentCardIndex;
+        // Ensure index is valid before accessing card
+        if (safeIndex >= cards.length) return;
+        const cardId = cards[safeIndex].id;
 
-        const nextIndex = (currentCardIndex + 1) % cards.length;
-        setCurrentCardIndex(nextIndex);
-        setShowBack(false);
+        // Call the mutation
+        createReviewMutation.mutate({ cardId, deckId, result }, {
+            onSuccess: () => {
+                // Move to the next card only after successful submission
+                const nextIndex = currentCardIndex + 1;
+                setCurrentCardIndex(nextIndex);
+                setShowBack(false);
+                // No need to check completion here, handled by render logic
+            },
+            onError: (err) => {
+                alert(`Failed to record review: ${err.message}`);
+                // Don't advance card on error
+            }
+        });
     };
 
-    // Add check for undefined deckId before loading/error checks
     if (deckId === undefined) {
         return <div className="text-center text-red-500 dark:text-red-400">Invalid Deck ID</div>;
     }
 
-    // Loading state
-    if (isLoading) {
-        return <div className="text-center text-gray-500 dark:text-gray-400">Loading deck... (Fetching Disabled)</div>;
+    if (isLoading && !cards) {
+        return <div className="text-center text-gray-500 dark:text-gray-400">Loading deck...</div>;
     }
-
-    // Error State
     if (error) {
-        return <div className="text-center text-red-500 dark:text-red-400">An error occurred loading the deck.</div>;
+        return <div className="text-center text-red-500 dark:text-red-400">Error loading deck: {error.message || 'Unknown error'}.</div>;
     }
-
-    // Empty Deck State
-    if (!cards || cards.length === 0) {
+    if (!isLoading && (!cards || cards.length === 0)) {
         return <div className="text-center text-gray-500 dark:text-gray-400">Deck is empty. <Link href={`/deck/${deckId}/edit`} className="text-primary underline">Add cards</Link></div>;
     }
+    if (!cards) return null;
 
-    // Valid card index calculation
-    const safeCurrentCardIndex = currentCardIndex % cards.length;
-    const currentCard = cards[safeCurrentCardIndex];
+    // Check if we finished the deck
+    if (currentCardIndex >= cards.length) {
+        return (
+            <div className="text-center space-y-4">
+                <p className="text-xl font-semibold">Deck finished!</p>
+                <Link href={`/deck/${deckId}/edit`} passHref legacyBehavior>
+                    <Button as="a" variant="default">Edit Deck</Button>
+                </Link>
+                <Button onClick={() => { setCurrentCardIndex(0); setShowBack(false); }} variant="secondary">Play Again</Button>
+                <Link href={`/`} passHref legacyBehavior>
+                    <Button as="a" variant="default">Back to Decks</Button>
+                </Link>
+            </div>
+        );
+    }
+
+    // currentCard should be valid now
+    const currentCard = cards[currentCardIndex];
 
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold text-primary">Playing Deck: {deckId}</h1>
-                {/* Use Next Link with Button */}
                 <Link href={`/deck/${deckId}/edit`} passHref legacyBehavior>
                     <Button as="a" variant="default">Edit this Deck</Button>
                 </Link>
@@ -96,26 +100,30 @@ export default function PlayDeckPage() { // Rename component
             <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-lg text-center space-y-4 min-h-[250px] flex flex-col justify-between">
                 <div>
                     <h2 className="text-lg font-semibold text-gray-500 dark:text-gray-400 mb-4">
-                        Card {safeCurrentCardIndex + 1} / {cards.length}
+                        Card {currentCardIndex + 1} / {cards.length}
                     </h2>
-                    <p className="text-2xl font-medium mb-4 min-h-[3em]">{currentCard?.front_text}</p>
+                    {/* Use whitespace-pre-wrap to respect newlines */}
+                    <p className="text-2xl font-medium mb-4 min-h-[3em] whitespace-pre-wrap">{currentCard?.front_text}</p>
                     {showBack && (
-                        <p className="text-xl text-secondary min-h-[2.5em]">{currentCard?.back_text}</p>
+                        <p className="text-xl text-secondary min-h-[2.5em] whitespace-pre-wrap">{currentCard?.back_text}</p>
                     )}
                 </div>
                 <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                     {showBack ? (
                         <div className="space-y-3">
                             <p className="font-medium">How well did you know it?</p>
-                            <div className="flex justify-center space-x-2">
-                                <Button onClick={() => handleReview(ReviewResult.EASY)} variant="easy" size="sm">Easy</Button>
-                                <Button onClick={() => handleReview(ReviewResult.MEDIUM)} variant="medium" size="sm">Medium</Button>
-                                <Button onClick={() => handleReview(ReviewResult.HARD)} variant="hard" size="sm">Hard</Button>
-                                <Button onClick={() => handleReview(ReviewResult.MISSED)} variant="missed" size="sm">Missed</Button>
+                            {/* Use gap for spacing and wrap for smaller screens */}
+                            <div className="flex flex-wrap justify-center gap-2">
+                                <Button onClick={() => handleReview(ReviewResult.EASY)} variant="easy" size="sm" disabled={createReviewMutation.isPending}>Easy</Button>
+                                <Button onClick={() => handleReview(ReviewResult.MEDIUM)} variant="medium" size="sm" disabled={createReviewMutation.isPending}>Medium</Button>
+                                <Button onClick={() => handleReview(ReviewResult.HARD)} variant="hard" size="sm" disabled={createReviewMutation.isPending}>Hard</Button>
+                                <Button onClick={() => handleReview(ReviewResult.MISSED)} variant="missed" size="sm" disabled={createReviewMutation.isPending}>Missed</Button>
                             </div>
+                            {/* Show loading indicator */}
+                            {createReviewMutation.isPending && <p className="text-sm text-gray-500">Recording...</p>}
                         </div>
                     ) : (
-                        <Button onClick={handleShowAnswer} variant="secondary">Show Answer</Button>
+                        <Button onClick={handleShowAnswer} variant="secondary" disabled={createReviewMutation.isPending}>Show Answer</Button>
                     )}
                 </div>
             </div>

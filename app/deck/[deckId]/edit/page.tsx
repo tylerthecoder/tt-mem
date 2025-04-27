@@ -1,74 +1,242 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams /*, useRouter */ } from 'next/navigation';
 import Link from 'next/link';
-import { useDeckCards, useDeck } from '@/hooks/queryHooks';
+import {
+    useDeckCards,
+    useDeck,
+    useCreateCardMutation,
+    useUpdateCardMutation,
+    useDeleteCardMutation
+} from '@/hooks/queryHooks';
 import Button from '@/components/Button';
+import { useAuth } from '@/context/AuthContext';
+// Import shared types
+import type { Card /*, Deck */ } from '@/types'; // Removed unused Deck import
 
-// Inline Card type needed because useDeckCards uses mock data / inline types
-interface Card {
-    id: string;
-    front_text: string;
-    back_text: string;
+// Remove Inline Card type
+// interface Card { ... }
+
+// --- Card Form Modal (Simple Example) ---
+interface CardFormModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onSubmit: (front: string, back: string) => void;
+    initialData?: { front: string; back: string };
+    isLoading: boolean;
+    title: string;
+}
+
+function CardFormModal({ isOpen, onClose, onSubmit, initialData, isLoading, title }: CardFormModalProps) {
+    const [front, setFront] = useState(initialData?.front || '');
+    const [back, setBack] = useState(initialData?.back || '');
+
+    // Reset form when initial data changes (e.g., opening edit modal)
+    React.useEffect(() => {
+        setFront(initialData?.front || '');
+        setBack(initialData?.back || '');
+    }, [initialData]);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!front.trim() || !back.trim()) {
+            alert('Both front and back text are required.');
+            return;
+        }
+        onSubmit(front.trim(), back.trim());
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-md">
+                <h2 className="text-xl font-semibold mb-4">{title}</h2>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label htmlFor="front-text" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Front Text</label>
+                        <textarea
+                            id="front-text"
+                            rows={3}
+                            value={front}
+                            onChange={(e) => setFront(e.target.value)}
+                            required
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        />
+                    </div>
+                    <div>
+                        <label htmlFor="back-text" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Back Text</label>
+                        <textarea
+                            id="back-text"
+                            rows={3}
+                            value={back}
+                            onChange={(e) => setBack(e.target.value)}
+                            required
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                        />
+                    </div>
+                    <div className="flex justify-end space-x-2 pt-4">
+                        <Button type="button" variant="default" onClick={onClose} disabled={isLoading}>Cancel</Button>
+                        <Button type="submit" variant="primary" disabled={isLoading || !front.trim() || !back.trim()}>
+                            {isLoading ? 'Saving...' : 'Save Card'}
+                        </Button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
 }
 
 export default function EditDeckPage() {
     const params = useParams();
     const deckId = typeof params?.deckId === 'string' ? params.deckId : undefined;
+    const { token } = useAuth();
+
+    // State for modals
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editingCard, setEditingCard] = useState<Card | null>(null);
 
     // Use the real hook for deck details
     const { data: deck, isLoading: deckLoading, error: deckError } = useDeck(deckId);
 
     // Fetch cards (currently mock)
-    const { data: cards, isLoading: cardsLoading, error: cardsError }: { data: Card[], isLoading: boolean, error: null } = useDeckCards(deckId);
+    const { data: cards, isLoading: cardsLoading, error: cardsError } = useDeckCards(deckId);
 
-    // TODO: Implement functions for adding, editing, deleting cards using Server Actions
-    const handleAddCard = () => console.log('Add card clicked');
-    const handleEditCard = (cardId: string) => console.log('Edit card:', cardId);
-    const handleDeleteCard = (cardId: string) => console.log('Delete card:', cardId);
+    // Get mutation functions
+    const createCardMutation = useCreateCardMutation();
+    const updateCardMutation = useUpdateCardMutation();
+    const deleteCardMutation = useDeleteCardMutation();
 
-    // TODO: Add update deck name functionality using useUpdateDeckMutation
+    // Event Handlers using mutations
+    const handleAddCardSubmit = (front: string, back: string) => {
+        if (!deckId || !token) return;
+        createCardMutation.mutate({ deckId, frontText: front, backText: back, token }, {
+            onSuccess: () => {
+                setIsAddModalOpen(false);
+                // Query invalidation handled by the hook
+            },
+            onError: (err) => {
+                console.error("Failed to create card:", err);
+                alert(`Error creating card: ${err.message}`);
+            }
+        });
+    };
 
+    const handleEditCardSubmit = (front: string, back: string) => {
+        if (!editingCard || !deckId || !token) return;
+        updateCardMutation.mutate({ cardId: editingCard.id, deckId, frontText: front, backText: back, token }, {
+            onSuccess: () => {
+                setIsEditModalOpen(false);
+                setEditingCard(null);
+            },
+            onError: (err) => {
+                console.error("Failed to update card:", err);
+                alert(`Error updating card: ${err.message}`);
+            }
+        });
+    };
+
+    const handleDeleteCard = (cardId: string) => {
+        if (!deckId || !token) return;
+        if (window.confirm('Are you sure you want to delete this card?')) {
+            deleteCardMutation.mutate({ cardId, deckId, token }, {
+                onError: (err) => {
+                    console.error("Failed to delete card:", err);
+                    alert(`Error deleting card: ${err.message}`);
+                }
+                // No onSuccess needed if optimistic updates/cache invalidation works
+            });
+        }
+    };
+
+    // Functions to open modals
+    const openAddModal = () => setIsAddModalOpen(true);
+    const openEditModal = (card: Card) => {
+        setEditingCard(card);
+        setIsEditModalOpen(true);
+    };
+
+    // Loading/Error states
     if (deckId === undefined) {
         return <div className="text-center text-red-500 dark:text-red-400">Invalid Deck ID</div>;
     }
+    const isLoading = deckLoading || cardsLoading;
+    const mutationLoading = createCardMutation.isPending || updateCardMutation.isPending || deleteCardMutation.isPending;
+    const error = deckError || cardsError || createCardMutation.error || updateCardMutation.error || deleteCardMutation.error;
 
-    // Combined loading state - use real deck loading
-    if (deckLoading || cardsLoading) return <div className="text-center text-gray-500 dark:text-gray-400">Loading deck details...</div>;
-
-    // Combined error state - use real deck error
-    if (deckError) return <div className="text-center text-red-500 dark:text-red-400">Error loading deck: {deckError.message || 'Unknown error'}</div>;
-    if (cardsError) return <div className="text-center text-red-500 dark:text-red-400">An error occurred loading cards.</div>;
+    if (isLoading && (!deck || !cards)) return <div className="text-center text-gray-500 dark:text-gray-400">Loading deck details...</div>;
+    if (error) return <div className="text-center text-red-500 dark:text-red-400">Error: {error.message || 'Unknown error'}</div>;
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-12">
             <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold text-primary">Edit Deck: {deck?.name || deckId}</h1>
-                <Link href={`/deck/${deckId}/play`} passHref legacyBehavior>
-                    <Button as="a" variant="secondary">Play this Deck</Button>
-                </Link>
+                <h1 className="text-3xl font-bold text-primary truncate">Edit Deck: {deck?.name || deckId}</h1>
+                <div className="flex space-x-2">
+                    <Link href={`/deck/${deckId}/play`} passHref legacyBehavior>
+                        <Button as="a" variant="secondary">Play this Deck</Button>
+                    </Link>
+                    {/* TODO: Add Edit Deck Name Button/Modal */}
+                </div>
             </div>
             <hr className="border-gray-300 dark:border-gray-700" />
-            <Button onClick={handleAddCard} variant="primary">Add New Card</Button>
+
+            {token ? (
+                <Button onClick={openAddModal} variant="primary" disabled={mutationLoading}>
+                    Add New Card
+                </Button>
+            ) : (
+                <p className="text-center text-gray-500 dark:text-gray-400">Please login to manage cards.</p>
+            )}
+
             <h2 className="text-2xl font-semibold">Cards in Deck</h2>
-            {cards && cards.length > 0 ? (
+            {cardsLoading && <div className="text-center text-gray-500 dark:text-gray-400">Loading cards...</div>}
+            {!cardsLoading && cards && cards.length > 0 ? (
                 <ul className="space-y-4">
                     {cards.map(card => (
                         <li key={card.id} className="p-4 bg-white dark:bg-gray-800 rounded shadow space-y-2">
                             <div><strong className="font-medium">Front:</strong> {card.front_text}</div>
                             <div><strong className="font-medium">Back:</strong> {card.back_text}</div>
-                            <div className="flex space-x-2 pt-2">
-                                <Button onClick={() => handleEditCard(card.id)} variant="default" size="sm">Edit</Button>
-                                <Button onClick={() => handleDeleteCard(card.id)} variant="primary" size="sm">Delete</Button>
-                            </div>
+                            {token && (
+                                <div className="flex space-x-2 pt-2">
+                                    <Button onClick={() => openEditModal(card)} variant="default" size="sm" disabled={mutationLoading}>Edit</Button>
+                                    <Button
+                                        onClick={() => handleDeleteCard(card.id)}
+                                        variant="primary"
+                                        size="sm"
+                                        disabled={deleteCardMutation.isPending && deleteCardMutation.variables?.cardId === card.id}
+                                        aria-label={`Delete card: ${card.front_text}`}
+                                    >
+                                        {(deleteCardMutation.isPending && deleteCardMutation.variables?.cardId === card.id) ? 'Deleting...' : 'Delete'}
+                                    </Button>
+                                </div>
+                            )}
                         </li>
                     ))}
                 </ul>
             ) : (
-                <p className="text-center text-gray-500 dark:text-gray-400">No cards in this deck yet.</p>
+                !cardsLoading && <p className="text-center text-gray-500 dark:text-gray-400">No cards in this deck yet. {token ? 'Add one above!' : 'Login to add cards.'}</p>
             )}
-            {/* TODO: Add forms/modals for adding/editing cards */}
+
+            {/* Add Card Modal */}
+            <CardFormModal
+                isOpen={isAddModalOpen}
+                onClose={() => setIsAddModalOpen(false)}
+                onSubmit={handleAddCardSubmit}
+                isLoading={createCardMutation.isPending}
+                title="Add New Card"
+            />
+
+            {/* Edit Card Modal */}
+            <CardFormModal
+                isOpen={isEditModalOpen}
+                onClose={() => { setIsEditModalOpen(false); setEditingCard(null); }}
+                onSubmit={handleEditCardSubmit}
+                initialData={editingCard ? { front: editingCard.front_text, back: editingCard.back_text } : undefined}
+                isLoading={updateCardMutation.isPending}
+                title="Edit Card"
+            />
         </div>
     );
 }

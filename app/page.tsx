@@ -9,15 +9,11 @@ import {
 } from '@/hooks/queryHooks'; // Use path alias
 import Button from '@/components/Button'; // Use path alias
 import { useAuth } from '@/context/AuthContext'; // Use path alias
+// Import shared type
+import type { Deck } from '@/types';
 
-
-// Inline Deck type (mirroring definition in queryHooks for now)
-interface Deck {
-    id: string;
-    name: string;
-    created_at?: string;
-    updated_at?: string;
-}
+// Remove Inline Deck type
+// interface Deck { ... }
 
 // Renamed component to follow Next.js conventions (PascalCase)
 export default function HomePage() {
