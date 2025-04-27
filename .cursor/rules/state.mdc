@@ -1,0 +1,15 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# State Management
+
+- **Server State:** [TanStack Query (React Query)](https://tanstack.com/query/latest) is used for managing server state, caching, and data fetching.
+    - Hooks wrapping server actions are defined in `[app/hooks/queryHooks.ts](mdc:app/hooks/queryHooks.ts)` (e.g., `useDecks`, `useDeckCards`, `useCreateDeckMutation`).
+    - Query keys are defined within `queryHooks.ts` for cache management.
+    - Providers are set up in `[app/providers.tsx](mdc:app/providers.tsx)`.
+- **Client/Auth State:** React Context is used for managing authentication state.
+    - The context is defined in `[app/context/AuthContext.tsx](mdc:app/context/AuthContext.tsx)`.
+    - The `useAuth` hook for accessing context is in `[app/context/useAuth.tsx](mdc:app/context/useAuth.tsx)`.
+    - The `AuthProvider` is included within `AppProviders` in `[app/providers.tsx](mdc:app/providers.tsx)`.

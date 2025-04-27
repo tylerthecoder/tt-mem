@@ -1,0 +1,18 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Styling (Tailwind CSS v4)
+
+Styling is handled using [Tailwind CSS v4](https://tailwindcss.com/blog/tailwindcss-v4-alpha).
+
+- **Setup:** Tailwind is imported directly into `[app/globals.css](mdc:app/globals.css)` using `@import "tailwindcss";`.
+- **Theme Customization:** Custom theme values (like primary/secondary colors) are defined using the `@theme` directive within `[app/globals.css](mdc:app/globals.css)`.
+- **Usage:** Standard Tailwind utility classes are used throughout the components (e.g., `bg-primary`, `text-gray-900`, `p-4`, `rounded`).
+- **Consistency:** The project aims for a consistent look, avoiding explicit light/dark mode variations (`dark:` prefixes have been removed).
+
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to

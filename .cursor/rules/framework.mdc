@@ -1,0 +1,15 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Framework & Project Structure
+
+This is a [Next.js](https://nextjs.org/) project using the App Router (`app/` directory) and TypeScript.
+
+- **Pages/Routes:** Defined by folders and `page.tsx` files within the `app/` directory (e.g., `app/page.tsx`, `app/deck/[deckId]/edit/page.tsx`).
+- **Layout:** The root layout is defined in `[app/layout.tsx](mdc:app/layout.tsx)`.
+- **Components:** Reusable UI components are typically placed in `[app/components/](mdc:app/components)`. Example: `[Button.tsx](mdc:app/components/Button.tsx)`.
+- **Server Logic:** Backend logic is primarily handled using Next.js Server Actions located in `[app/actions/](mdc:app/actions)`. Actions are grouped by resource (e.g., `[decks.ts](mdc:app/actions/decks.ts)`, `[cards.ts](mdc:app/actions/cards.ts)`).
+- **Utilities:** Shared helper functions are found in `[app/lib/](mdc:app/lib)` (e.g., `[db.ts](mdc:app/lib/db.ts)`, `[auth.ts](mdc:app/lib/auth.ts)`, `[utils.ts](mdc:app/lib/utils.ts)`).
+- **Types:** Shared TypeScript types and interfaces are defined in `[app/types.ts](mdc:app/types.ts)`.

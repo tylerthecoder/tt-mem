@@ -13,6 +13,7 @@ import {
     createDeckAction,
     updateDeckAction,
     deleteDeckAction,
+    importDeckAction,
 } from '@/actions/decks';
 // Import Server Actions for cards
 import {
@@ -297,6 +298,45 @@ export const useCreateReviewEventMutation = () => {
             console.error(`Error recording review for card ${variables.cardId}:`, error);
             // Optionally show user feedback
         }
+    });
+};
+
+// Define type for card data used in import
+interface ImportCardData {
+    front: string;
+    back: string;
+}
+
+/**
+ * Hook for importing a new deck from JSON data.
+ * Requires auth token.
+ */
+export const useImportDeckMutation = () => {
+    const queryClient = useQueryClient();
+    return useMutation<
+        Deck, // Returns the created Deck
+        Error,
+        { deckName: string; cardsData: ImportCardData[]; token: string | undefined | null },
+        unknown // Context type, if needed
+    >({
+        mutationFn: async ({ deckName, cardsData, token }) => {
+            const result = await importDeckAction(deckName, cardsData, token ?? undefined);
+            if (!result.success || !result.deck) {
+                // Throw detailed error if available
+                const errorDetails = result.errorDetails ? `\nDetails: ${result.errorDetails.join('\n')}` : '';
+                throw new Error(`${result.message || 'Failed to import deck.'}${errorDetails}`);
+            }
+            return result.deck;
+        },
+        onSuccess: () => {
+            // Invalidate all deck queries to refresh the list
+            queryClient.invalidateQueries({ queryKey: queryKeys.decks.all });
+        },
+        onError: (error) => {
+            // Error is already thrown with details from mutationFn if possible
+            console.error("Import Deck Mutation Error:", error);
+            // UI should catch and display this error
+        },
     });
 };
 
