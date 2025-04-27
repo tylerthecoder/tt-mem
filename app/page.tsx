@@ -269,8 +269,8 @@ export default function HomePage() {
                         >
                             <span className="font-medium text-lg text-gray-900">{deck.name}</span>
                             <div className="space-x-2">
-                                {/* Update Play link to point to /options */}
-                                <Link href={`/deck/${deck.id}/options`} passHref legacyBehavior><Button as="a" variant="secondary" size="sm">Play</Button></Link>
+                                {/* Update Play link to point to /overview */}
+                                <Link href={`/deck/${deck.id}/overview`} passHref legacyBehavior><Button as="a" variant="secondary" size="sm">Play</Button></Link>
                                 <Link href={`/deck/${deck.id}/edit`} passHref legacyBehavior><Button as="a" variant="default" size="sm">Edit</Button></Link>
                                 {token && (
                                     <Button

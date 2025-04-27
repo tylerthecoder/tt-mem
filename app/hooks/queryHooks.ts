@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery, type UseQueryOptions } from '@tanstack/react-query';
 // Import shared types
 import type { Card, Deck, ReviewHistoryEntry } from '@/types';
 import { ReviewResult } from '@/types';
@@ -25,6 +25,7 @@ import {
 } from '@/actions/cards';
 // Import Server Actions for reviews
 import { fetchDeckReviewHistoryAction } from '@/actions/reviews'; // Import the new action
+import { getLastReviewEventPerCard } from '@/actions/reviewEvents'; // Import the new action
 // Remove unused client functions
 // import {
 //     createDeck,
@@ -47,6 +48,13 @@ const queryKeys = {
     reviews: {
         historyForDeck: (deckId: string) => ['reviews', deckId, 'history'] as const,
     },
+};
+
+export const reviewKeys = {
+    all: ['reviews'] as const,
+    deck: (deckId: string) => [...reviewKeys.all, 'deck', deckId] as const,
+    card: (cardId: string) => [...reviewKeys.all, 'card', cardId] as const,
+    lastPerCard: (deckId: string) => [...reviewKeys.all, 'lastPerCard', deckId] as const, // New key
 };
 
 /**
@@ -367,6 +375,17 @@ export const useImportDeckMutation = () => {
             console.error("Import Deck Mutation Error:", error);
             // UI should catch and display this error
         },
+    });
+};
+
+// Query to get the last review event result for each card in a deck
+export const useLastReviewResults = (deckId: string | undefined, options?: Partial<UseQueryOptions<Map<string, { cardId: string; lastResult: ReviewResult; timestamp: Date; }>, Error>>) => {
+    return useQuery({
+        queryKey: reviewKeys.lastPerCard(deckId!), // Assert deckId is defined here, handled by enabled
+        queryFn: () => getLastReviewEventPerCard(deckId!),
+        enabled: !!deckId, // Only run the query if deckId is available
+        staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+        ...options,
     });
 };
 

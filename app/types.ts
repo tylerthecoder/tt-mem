@@ -66,15 +66,12 @@ export interface JwtPayload {
     exp?: number;
 }
 
-// --- Component/Action Specific Payloads (Consider if reusable) ---
 
-// Payload for importing cards via JSON
 export interface SingleImportCardData {
     front: string;
     back: string;
 }
 
-// Combined type for displaying review history
 export interface ReviewHistoryEntry {
     eventId: string;
     cardId: string;
