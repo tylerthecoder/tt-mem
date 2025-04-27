@@ -65,3 +65,11 @@ export interface JwtPayload {
     iat?: number;
     exp?: number;
 }
+
+// --- Component/Action Specific Payloads (Consider if reusable) ---
+
+// Payload for importing cards via JSON
+export interface SingleImportCardData {
+    front: string;
+    back: string;
+}

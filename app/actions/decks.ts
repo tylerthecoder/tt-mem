@@ -34,6 +34,7 @@ export async function fetchDecksAction(): Promise<{ success: boolean; decks?: De
         const mappedDecks = decksArray.map(mapDeckDocument).filter((d): d is Deck => d !== null);
         return { success: true, decks: mappedDecks };
     } catch (error) {
+        console.error('[Fetch Decks Action Error]', error);
         const message = error instanceof Error ? error.message : 'Failed to fetch decks';
         return { success: false, message };
     }
@@ -54,6 +55,7 @@ export async function fetchDeckByIdAction(deckId: string): Promise<{ success: bo
         }
         return { success: true, deck: mappedDeck };
     } catch (error) {
+        console.error('[Fetch Deck By ID Action Error]', error);
         const message = error instanceof Error ? error.message : 'Failed to fetch deck';
         return { success: false, message };
     }
@@ -95,6 +97,7 @@ export async function createDeckAction(name: string, token: string | undefined):
         revalidatePath('/');
         return { success: true, deck: mappedCreatedDeck };
     } catch (error) {
+        console.error('[Create Deck Action Error]', error);
         const message = error instanceof Error ? error.message : 'Failed to create deck';
         return { success: false, message };
     }
@@ -129,6 +132,7 @@ export async function updateDeckAction(deckId: string, name: string, token: stri
         revalidatePath(`/deck/${deckId}/edit`);
         return { success: true, deck: mappedUpdatedDeck };
     } catch (error) {
+        console.error('[Update Deck Action Error]', error);
         const message = error instanceof Error ? error.message : 'Failed to update deck';
         return { success: false, message };
     }
@@ -145,7 +149,7 @@ export async function deleteDeckAction(deckId: string, token: string | undefined
     try {
         const { db } = await connectToDatabase();
         const decksCollection = db.collection<DeckDocument>('decks');
-        // TODO: Add logic to delete associated cards first if necessary
+        // TODO: Consider deleting associated cards & review events here using a transaction
         const result = await decksCollection.deleteOne({ _id: new ObjectId(deckId) });
 
         if (result.deletedCount === 0) {

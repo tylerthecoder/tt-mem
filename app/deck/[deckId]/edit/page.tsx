@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useParams /*, useRouter */ } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
     useDeckCards,
@@ -12,11 +12,7 @@ import {
 } from '@/hooks/queryHooks';
 import Button from '@/components/Button';
 import { useAuth } from '@/context/useAuth';
-// Import shared types
-import type { Card /*, Deck */ } from '@/types'; // Removed unused Deck import
-
-// Remove Inline Card type
-// interface Card { ... }
+import type { Card } from '@/types';
 
 // --- Card Form Modal (Simple Example) ---
 interface CardFormModalProps {
@@ -32,7 +28,6 @@ function CardFormModal({ isOpen, onClose, onSubmit, initialData, isLoading, titl
     const [front, setFront] = useState(initialData?.front || '');
     const [back, setBack] = useState(initialData?.back || '');
 
-    // Reset form when initial data changes (e.g., opening edit modal)
     React.useEffect(() => {
         setFront(initialData?.front || '');
         setBack(initialData?.back || '');
@@ -46,6 +41,12 @@ function CardFormModal({ isOpen, onClose, onSubmit, initialData, isLoading, titl
         }
         onSubmit(front.trim(), back.trim());
     };
+
+    const handleClose = () => {
+        setFront('');
+        setBack('');
+        onClose();
+    }
 
     if (!isOpen) return null;
 
@@ -77,7 +78,7 @@ function CardFormModal({ isOpen, onClose, onSubmit, initialData, isLoading, titl
                         />
                     </div>
                     <div className="flex justify-end space-x-2 pt-4">
-                        <Button type="button" variant="default" onClick={onClose} disabled={isLoading}>Cancel</Button>
+                        <Button type="button" variant="default" onClick={handleClose} disabled={isLoading}>Cancel</Button>
                         <Button type="submit" variant="primary" disabled={isLoading || !front.trim() || !back.trim()}>
                             {isLoading ? 'Saving...' : 'Save Card'}
                         </Button>
@@ -115,7 +116,6 @@ export default function EditDeckPage() {
         createCardMutation.mutate({ deckId, frontText: front, backText: back, token }, {
             onSuccess: () => {
                 setIsAddModalOpen(false);
-                // Query invalidation handled by the hook
             },
             onError: (err) => {
                 console.error("Failed to create card:", err);
@@ -146,7 +146,6 @@ export default function EditDeckPage() {
                     console.error("Failed to delete card:", err);
                     alert(`Error deleting card: ${err.message}`);
                 }
-                // No onSuccess needed if optimistic updates/cache invalidation works
             });
         }
     };

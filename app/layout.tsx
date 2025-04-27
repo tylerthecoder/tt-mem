@@ -16,7 +16,7 @@ function AppHeader() {
         <header className="bg-gray-100 p-4 shadow-md border-b border-gray-200">
             <nav className="container mx-auto flex justify-between items-center">
                 <Link href="/" className="text-xl font-bold text-primary">
-                    Anki Clone
+                    TT Mem
                 </Link>
                 <div>
                     {token ? (
@@ -55,7 +55,7 @@ export default function RootLayout({
                         {children}
                     </main>
                     <footer className="text-center text-gray-500 py-4 mt-8 border-t border-gray-200">
-                        © {new Date().getFullYear()} Anki Clone
+                        © {new Date().getFullYear()} TT Mem
                     </footer>
                 </AppProviders>
             </body>

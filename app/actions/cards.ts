@@ -211,11 +211,19 @@ export async function deleteCardAction(input: DeleteCardInput): Promise<DeleteCa
     try {
         const { db } = await connectToDatabase();
         const cardsCollection = db.collection<CardDocument>('cards');
+        const reviewsCollection = db.collection<ReviewEventDocument>('review_events');
 
-        // TODO: Delete associated Review Events if necessary
+        // TODO: Use a transaction to ensure atomicity
+        // 1. Delete associated review events
+        await reviewsCollection.deleteMany({ card_id: new ObjectId(cardId) });
+
+        // 2. Delete the card itself
         const result = await cardsCollection.deleteOne({ _id: new ObjectId(cardId), deck_id: new ObjectId(deckId) });
 
         if (result.deletedCount === 0) {
+            // This might happen if the card was deleted between the review deletion and card deletion
+            // Or if the card didn't belong to the deck (though validation should prevent this)
+            console.warn(`Card ${cardId} not found for deletion in deck ${deckId}, but associated reviews might have been deleted.`);
             return { success: false, message: 'Card not found or does not belong to the specified deck' };
         }
 

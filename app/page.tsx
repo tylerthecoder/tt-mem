@@ -14,7 +14,7 @@ import { useAuth } from './context/useAuth';
 // Import shared type
 import type { Deck } from '@/types';
 
-// Zod schema for validating the imported card data JSON
+// Zod schema for validating the JSON (an array of card objects)
 const cardImportSchema = z.array(
     z.object({
         front: z.string().trim().min(1, { message: 'Card front text cannot be empty' }),
@@ -22,17 +22,13 @@ const cardImportSchema = z.array(
     })
 ).min(1, { message: 'Imported JSON must contain at least one card' });
 
-// Type for validated card data
-type ImportCardData = z.infer<typeof cardImportSchema>;
+// Type for the validated array of card data
+type ValidatedImportData = z.infer<typeof cardImportSchema>;
 
-// Remove Inline Deck type
-// interface Deck { ... }
-
-// --- Import Deck Modal Component ---
 interface ImportDeckModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSubmit: (deckName: string, cardsData: ImportCardData) => void;
+    onSubmit: (deckName: string, cardsData: ValidatedImportData) => void;
     isLoading: boolean;
 }
 
@@ -76,7 +72,7 @@ function ImportDeckModal({ isOpen, onClose, onSubmit, isLoading }: ImportDeckMod
             return;
         }
 
-        // Submit validated data
+        // Submit the validated array (validationResult.data)
         onSubmit(deckName.trim(), validationResult.data);
     };
 
@@ -198,7 +194,7 @@ export default function HomePage() {
     };
 
     // Handler for import submission
-    const handleImportDeckSubmit = (deckName: string, cardsData: ImportCardData) => {
+    const handleImportDeckSubmit = (deckName: string, cardsData: ValidatedImportData) => {
         if (!token) return;
 
         importDeckMutation.mutate({ deckName, cardsData, token }, {

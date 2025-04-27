@@ -301,10 +301,12 @@ export const useCreateReviewEventMutation = () => {
     });
 };
 
-// Define type for card data used in import
-interface ImportCardData {
-    front: string;
-    back: string;
+// Type used for the mutation variables - should match the action input type
+// This mirrors the structure expected by importDeckAction
+interface ImportDeckMutationVariables {
+    deckName: string;
+    cardsData: { front: string; back: string }[]; // Expect an array of simple objects
+    token: string | undefined | null;
 }
 
 /**
@@ -314,15 +316,15 @@ interface ImportCardData {
 export const useImportDeckMutation = () => {
     const queryClient = useQueryClient();
     return useMutation<
-        Deck, // Returns the created Deck
+        Deck,
         Error,
-        { deckName: string; cardsData: ImportCardData[]; token: string | undefined | null },
-        unknown // Context type, if needed
+        ImportDeckMutationVariables, // Use the defined variable type
+        unknown
     >({
         mutationFn: async ({ deckName, cardsData, token }) => {
+            // The action expects cardsData: { front: string; back: string }[]
             const result = await importDeckAction(deckName, cardsData, token ?? undefined);
             if (!result.success || !result.deck) {
-                // Throw detailed error if available
                 const errorDetails = result.errorDetails ? `\nDetails: ${result.errorDetails.join('\n')}` : '';
                 throw new Error(`${result.message || 'Failed to import deck.'}${errorDetails}`);
             }

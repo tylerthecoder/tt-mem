@@ -6,7 +6,6 @@ import Link from 'next/link';
 import Button from '@/components/Button';
 import { useDeckCards, useCreateReviewEventMutation } from '@/hooks/queryHooks';
 import { ReviewResult } from '@/types';
-// import type { Card } from '@/types'; // Card is implicitly typed by useDeckCards
 
 export default function PlayDeckPage() {
     const params = useParams();
@@ -20,7 +19,6 @@ export default function PlayDeckPage() {
 
     useEffect(() => {
         if (cards && cards.length > 0) {
-            // Reset index if cards data changes (e.g., on initial load)
             setCurrentCardIndex(0);
             setShowBack(false);
         }
@@ -33,22 +31,17 @@ export default function PlayDeckPage() {
     const handleReview = (result: ReviewResult) => {
         if (!cards || cards.length === 0 || deckId === undefined || createReviewMutation.isPending) return;
         const safeIndex = currentCardIndex;
-        // Ensure index is valid before accessing card
         if (safeIndex >= cards.length) return;
         const cardId = cards[safeIndex].id;
 
-        // Call the mutation
         createReviewMutation.mutate({ cardId, deckId, result }, {
             onSuccess: () => {
-                // Move to the next card only after successful submission
                 const nextIndex = currentCardIndex + 1;
                 setCurrentCardIndex(nextIndex);
                 setShowBack(false);
-                // No need to check completion here, handled by render logic
             },
             onError: (err) => {
                 alert(`Failed to record review: ${err.message}`);
-                // Don't advance card on error
             }
         });
     };
@@ -68,7 +61,7 @@ export default function PlayDeckPage() {
     }
     if (!cards) return null;
 
-    // Check if we finished the deck
+    // Handle deck completion state
     if (currentCardIndex >= cards.length) {
         return (
             <div className="text-center space-y-4">
@@ -84,7 +77,6 @@ export default function PlayDeckPage() {
         );
     }
 
-    // currentCard should be valid now
     const currentCard = cards[currentCardIndex];
 
     return (
