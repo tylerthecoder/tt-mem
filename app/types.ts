@@ -73,3 +73,13 @@ export interface SingleImportCardData {
     front: string;
     back: string;
 }
+
+// Combined type for displaying review history
+export interface ReviewHistoryEntry {
+    eventId: string;
+    cardId: string;
+    cardFront: string;
+    cardBack: string;
+    result: ReviewResult;
+    timestamp: Date;
+}

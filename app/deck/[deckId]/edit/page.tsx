@@ -173,8 +173,8 @@ export default function EditDeckPage() {
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold text-primary truncate">Edit Deck: {deck?.name || deckId}</h1>
                 <div className="flex space-x-2">
-                    <Link href={`/deck/${deckId}/play`} passHref legacyBehavior>
-                        <Button as="a" variant="secondary">Play this Deck</Button>
+                    <Link href={`/deck/${deckId}/options`} passHref legacyBehavior>
+                        <Button as="a" variant="secondary">Play / View History</Button>
                     </Link>
                     {/* TODO: Add Edit Deck Name Button/Modal */}
                 </div>

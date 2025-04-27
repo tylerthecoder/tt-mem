@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Button from '@/components/Button';
 import { useDeckCards, useCreateReviewEventMutation } from '@/hooks/queryHooks';
@@ -9,23 +9,26 @@ import { ReviewResult } from '@/types';
 
 export default function PlayDeckPage() {
     const params = useParams();
+    const searchParams = useSearchParams();
     const deckId = typeof params?.deckId === 'string' ? params.deckId : undefined;
+
+    const isFlipped = searchParams.get('flipped') === 'true';
 
     const { data: cards, isLoading, error } = useDeckCards(deckId);
     const createReviewMutation = useCreateReviewEventMutation();
 
     const [currentCardIndex, setCurrentCardIndex] = useState<number>(0);
-    const [showBack, setShowBack] = useState<boolean>(false);
+    const [showTarget, setShowTarget] = useState<boolean>(false);
 
     useEffect(() => {
         if (cards && cards.length > 0) {
             setCurrentCardIndex(0);
-            setShowBack(false);
+            setShowTarget(false);
         }
     }, [cards]);
 
-    const handleShowAnswer = () => {
-        setShowBack(true);
+    const handleShowTarget = () => {
+        setShowTarget(true);
     };
 
     const handleReview = (result: ReviewResult) => {
@@ -38,7 +41,7 @@ export default function PlayDeckPage() {
             onSuccess: () => {
                 const nextIndex = currentCardIndex + 1;
                 setCurrentCardIndex(nextIndex);
-                setShowBack(false);
+                setShowTarget(false);
             },
             onError: (err) => {
                 alert(`Failed to record review: ${err.message}`);
@@ -61,15 +64,14 @@ export default function PlayDeckPage() {
     }
     if (!cards) return null;
 
-    // Handle deck completion state
     if (currentCardIndex >= cards.length) {
         return (
             <div className="text-center space-y-4">
                 <p className="text-xl font-semibold">Deck finished!</p>
-                <Link href={`/deck/${deckId}/edit`} passHref legacyBehavior>
-                    <Button as="a" variant="default">Edit Deck</Button>
+                <Link href={`/deck/${deckId}/options`} passHref legacyBehavior>
+                    <Button as="a" variant="default">Options & History</Button>
                 </Link>
-                <Button onClick={() => { setCurrentCardIndex(0); setShowBack(false); }} variant="secondary">Play Again</Button>
+                <Button onClick={() => { setCurrentCardIndex(0); setShowTarget(false); }} variant="secondary">Play Again</Button>
                 <Link href={`/`} passHref legacyBehavior>
                     <Button as="a" variant="default">Back to Decks</Button>
                 </Link>
@@ -79,12 +81,18 @@ export default function PlayDeckPage() {
 
     const currentCard = cards[currentCardIndex];
 
+    const initialText = isFlipped ? currentCard?.back_text : currentCard?.front_text;
+    const targetText = isFlipped ? currentCard?.front_text : currentCard?.back_text;
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold text-primary">Playing Deck: {deckId}</h1>
+                <Link href={`/deck/${deckId}/options`} className="text-sm text-primary hover:underline">
+                    &larr; Back to Options
+                </Link>
+                <h1 className="text-2xl font-bold text-primary">Playing: {deckId} {isFlipped ? '(Flipped)' : ''}</h1>
                 <Link href={`/deck/${deckId}/edit`} passHref legacyBehavior>
-                    <Button as="a" variant="default">Edit this Deck</Button>
+                    <Button as="a" variant="default" size="sm">Edit Deck</Button>
                 </Link>
             </div>
             <hr className="border-gray-300" />
@@ -94,13 +102,13 @@ export default function PlayDeckPage() {
                     <h2 className="text-lg font-semibold text-gray-500 mb-4">
                         Card {currentCardIndex + 1} / {cards.length}
                     </h2>
-                    <p className="text-2xl font-medium mb-4 min-h-[3em] whitespace-pre-wrap text-gray-900">{currentCard?.front_text}</p>
-                    {showBack && (
-                        <p className="text-xl text-secondary min-h-[2.5em] whitespace-pre-wrap">{currentCard?.back_text}</p>
+                    <p className="text-2xl font-medium mb-4 min-h-[3em] whitespace-pre-wrap text-gray-900">{initialText}</p>
+                    {showTarget && (
+                        <p className="text-xl text-secondary min-h-[2.5em] whitespace-pre-wrap">{targetText}</p>
                     )}
                 </div>
                 <div className="pt-4 border-t border-gray-200">
-                    {showBack ? (
+                    {showTarget ? (
                         <div className="space-y-3">
                             <p className="font-medium text-gray-700">How well did you know it?</p>
                             <div className="flex flex-wrap justify-center gap-2">
@@ -112,7 +120,7 @@ export default function PlayDeckPage() {
                             {createReviewMutation.isPending && <p className="text-sm text-gray-500">Recording...</p>}
                         </div>
                     ) : (
-                        <Button onClick={handleShowAnswer} variant="secondary" disabled={createReviewMutation.isPending}>Show Answer</Button>
+                        <Button onClick={handleShowTarget} variant="secondary" disabled={createReviewMutation.isPending}>Show {isFlipped ? 'Front' : 'Back'}</Button>
                     )}
                 </div>
             </div>

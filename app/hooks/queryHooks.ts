@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 // Import shared types
-import type { Card, Deck } from '@/types';
+import type { Card, Deck, ReviewHistoryEntry } from '@/types';
 import { ReviewResult } from '@/types';
 // Remove mock imports
 // import { fetchMockDeckCards, fetchMockDecks, mockLogin } from '../data/mock';
@@ -23,6 +23,8 @@ import {
     deleteCardAction,
     createReviewEventAction, // Import the action
 } from '@/actions/cards';
+// Import Server Actions for reviews
+import { fetchDeckReviewHistoryAction } from '@/actions/reviews'; // Import the new action
 // Remove unused client functions
 // import {
 //     createDeck,
@@ -42,6 +44,9 @@ const queryKeys = {
         forDeck: (deckId: string) => ['cards', deckId] as const,
     },
     // Add other top-level keys (e.g., user) as needed
+    reviews: {
+        historyForDeck: (deckId: string) => ['reviews', deckId, 'history'] as const,
+    },
 };
 
 /**
@@ -100,6 +105,29 @@ export const useDeckCards = (deckId: string | undefined) => {
         },
         enabled: !!deckId,
         staleTime: 5 * 60 * 1000,
+    });
+};
+
+// --- Deck Query Hooks ---
+
+/**
+ * Hook to fetch review history for a specific deck using Server Action.
+ */
+export const useDeckReviewHistory = (deckId: string | undefined) => {
+    return useQuery<ReviewHistoryEntry[], Error>({
+        queryKey: queryKeys.reviews.historyForDeck(deckId || 'unknown'),
+        queryFn: async () => {
+            if (!deckId) {
+                return Promise.reject(new Error('Deck ID is required to fetch review history'));
+            }
+            const result = await fetchDeckReviewHistoryAction(deckId);
+            if (!result.success || !result.history) {
+                throw new Error(result.message || 'Failed to fetch review history');
+            }
+            return result.history;
+        },
+        enabled: !!deckId,
+        staleTime: 1 * 60 * 1000, // Cache history for 1 minute
     });
 };
 

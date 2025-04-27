@@ -269,13 +269,13 @@ export default function HomePage() {
                         >
                             <span className="font-medium text-lg text-gray-900">{deck.name}</span>
                             <div className="space-x-2">
-                                {/* Use Next.js Link with href */}
-                                <Link href={`/deck/${deck.id}/play`} passHref legacyBehavior><Button as="a" variant="secondary" size="sm">Play</Button></Link>
+                                {/* Update Play link to point to /options */}
+                                <Link href={`/deck/${deck.id}/options`} passHref legacyBehavior><Button as="a" variant="secondary" size="sm">Play</Button></Link>
                                 <Link href={`/deck/${deck.id}/edit`} passHref legacyBehavior><Button as="a" variant="default" size="sm">Edit</Button></Link>
                                 {token && (
                                     <Button
                                         onClick={() => handleDeleteDeck(deck.id)}
-                                        variant="primary" // Consider a 'danger' variant
+                                        variant="primary"
                                         size="sm"
                                         disabled={deleteDeckMutation.isPending && deleteDeckMutation.variables?.deckId === deck.id}
                                     >
