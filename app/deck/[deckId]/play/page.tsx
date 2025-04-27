@@ -54,17 +54,17 @@ export default function PlayDeckPage() {
     };
 
     if (deckId === undefined) {
-        return <div className="text-center text-red-500 dark:text-red-400">Invalid Deck ID</div>;
+        return <div className="text-center text-red-500">Invalid Deck ID</div>;
     }
 
     if (isLoading && !cards) {
-        return <div className="text-center text-gray-500 dark:text-gray-400">Loading deck...</div>;
+        return <div className="text-center text-gray-500">Loading deck...</div>;
     }
     if (error) {
-        return <div className="text-center text-red-500 dark:text-red-400">Error loading deck: {error.message || 'Unknown error'}.</div>;
+        return <div className="text-center text-red-500">Error loading deck: {error.message || 'Unknown error'}.</div>;
     }
     if (!isLoading && (!cards || cards.length === 0)) {
-        return <div className="text-center text-gray-500 dark:text-gray-400">Deck is empty. <Link href={`/deck/${deckId}/edit`} className="text-primary underline">Add cards</Link></div>;
+        return <div className="text-center text-gray-500">Deck is empty. <Link href={`/deck/${deckId}/edit`} className="text-primary underline">Add cards</Link></div>;
     }
     if (!cards) return null;
 
@@ -95,31 +95,28 @@ export default function PlayDeckPage() {
                     <Button as="a" variant="default">Edit this Deck</Button>
                 </Link>
             </div>
-            <hr className="border-gray-300 dark:border-gray-700" />
+            <hr className="border-gray-300" />
 
-            <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-lg text-center space-y-4 min-h-[250px] flex flex-col justify-between">
+            <div className="bg-white p-6 rounded shadow-lg text-center space-y-4 min-h-[250px] flex flex-col justify-between">
                 <div>
-                    <h2 className="text-lg font-semibold text-gray-500 dark:text-gray-400 mb-4">
+                    <h2 className="text-lg font-semibold text-gray-500 mb-4">
                         Card {currentCardIndex + 1} / {cards.length}
                     </h2>
-                    {/* Use whitespace-pre-wrap to respect newlines */}
-                    <p className="text-2xl font-medium mb-4 min-h-[3em] whitespace-pre-wrap">{currentCard?.front_text}</p>
+                    <p className="text-2xl font-medium mb-4 min-h-[3em] whitespace-pre-wrap text-gray-900">{currentCard?.front_text}</p>
                     {showBack && (
                         <p className="text-xl text-secondary min-h-[2.5em] whitespace-pre-wrap">{currentCard?.back_text}</p>
                     )}
                 </div>
-                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div className="pt-4 border-t border-gray-200">
                     {showBack ? (
                         <div className="space-y-3">
-                            <p className="font-medium">How well did you know it?</p>
-                            {/* Use gap for spacing and wrap for smaller screens */}
+                            <p className="font-medium text-gray-700">How well did you know it?</p>
                             <div className="flex flex-wrap justify-center gap-2">
                                 <Button onClick={() => handleReview(ReviewResult.EASY)} variant="easy" size="sm" disabled={createReviewMutation.isPending}>Easy</Button>
                                 <Button onClick={() => handleReview(ReviewResult.MEDIUM)} variant="medium" size="sm" disabled={createReviewMutation.isPending}>Medium</Button>
                                 <Button onClick={() => handleReview(ReviewResult.HARD)} variant="hard" size="sm" disabled={createReviewMutation.isPending}>Hard</Button>
                                 <Button onClick={() => handleReview(ReviewResult.MISSED)} variant="missed" size="sm" disabled={createReviewMutation.isPending}>Missed</Button>
                             </div>
-                            {/* Show loading indicator */}
                             {createReviewMutation.isPending && <p className="text-sm text-gray-500">Recording...</p>}
                         </div>
                     ) : (

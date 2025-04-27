@@ -8,7 +8,7 @@ import {
     useDeleteDeckMutation,
 } from '@/hooks/queryHooks'; // Use path alias
 import Button from '@/components/Button'; // Use path alias
-import { useAuth } from '@/context/AuthContext'; // Use path alias
+import { useAuth } from './context/useAuth';
 // Import shared type
 import type { Deck } from '@/types';
 
@@ -62,9 +62,9 @@ export default function HomePage() {
 
             {/* Create New Deck Form */}
             {token && (
-                <form onSubmit={handleCreateDeck} className="flex space-x-2 items-end p-4 bg-gray-100 dark:bg-gray-800 rounded shadow">
+                <form onSubmit={handleCreateDeck} className="flex space-x-2 items-end p-4 bg-gray-100 rounded shadow">
                     <div className="flex-grow">
-                        <label htmlFor="new-deck-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Deck Name</label>
+                        <label htmlFor="new-deck-name" className="block text-sm font-medium text-gray-700 mb-1">New Deck Name</label>
                         <input
                             id="new-deck-name"
                             type="text"
@@ -72,7 +72,7 @@ export default function HomePage() {
                             onChange={(e) => setNewDeckName(e.target.value)}
                             placeholder="Enter deck name..."
                             required
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
                             disabled={createDeckMutation.isPending}
                         />
                     </div>
@@ -86,20 +86,20 @@ export default function HomePage() {
                 </form>
             )}
             {!token && (
-                <p className="text-center text-gray-500 dark:text-gray-400">Please <Link href="/login" className="text-primary underline">login</Link> to create or manage decks.</p>
+                <p className="text-center text-gray-500">Please <Link href="/login" className="text-primary underline">login</Link> to create or manage decks.</p>
             )}
 
             {/* Deck List - Use real loading/error states */}
-            {isLoading && <div className="text-center text-gray-500 dark:text-gray-400">Loading decks...</div>}
-            {error && <div className="text-center text-red-500 dark:text-red-400">Error loading decks: {error.message || 'Unknown error'}</div>}
+            {isLoading && <div className="text-center text-gray-500">Loading decks...</div>}
+            {error && <div className="text-center text-red-500">Error loading decks: {error.message || 'Unknown error'}</div>}
             {!isLoading && !error && decks && (
                 <ul className="space-y-3">
                     {decks.map((deck: Deck) => (
                         <li
                             key={deck.id}
-                            className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded shadow"
+                            className="flex items-center justify-between p-4 bg-white rounded shadow"
                         >
-                            <span className="font-medium text-lg">{deck.name}</span>
+                            <span className="font-medium text-lg text-gray-900">{deck.name}</span>
                             <div className="space-x-2">
                                 {/* Use Next.js Link with href */}
                                 <Link href={`/deck/${deck.id}/play`} passHref legacyBehavior><Button as="a" variant="secondary" size="sm">Play</Button></Link>
@@ -118,7 +118,7 @@ export default function HomePage() {
                         </li>
                     ))}
                     {decks.length === 0 && (
-                        <p className="text-center text-gray-500 dark:text-gray-400">No decks found. {token ? 'Create one above!' : 'Login to create decks.'}</p>
+                        <p className="text-center text-gray-500">No decks found. {token ? 'Create one above!' : 'Login to create decks.'}</p>
                     )}
                 </ul>
             )}

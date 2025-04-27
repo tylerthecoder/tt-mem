@@ -1,37 +1,42 @@
-import type { Metadata } from "next";
+"use client";
 import { Inter } from "next/font/google";
 import Link from "next/link"; // Use Next.js Link
 import "./globals.css";
-import { AppProviders } from "./providers"; // Import the client providers component
-// Import providers - adjust paths if needed after restructuring
-// import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-// import { AuthProvider } from '../context/AuthContext';
+import { AppProviders } from "./providers";
+import { useAuth } from './context/useAuth';
 
 const inter = Inter({ subsets: ["latin"] });
 
-// Note: QueryClient and AuthProvider setup needs client components.
-// We'll create a separate client component for providers.
 
-export const metadata: Metadata = {
-    title: "Anki Clone",
-    description: "Anki card studying website",
-};
+// Header component to conditionally show login/logout
+function AppHeader() {
+    const { token, logout } = useAuth();
 
-// Define the Navbar component separately for clarity
-function Navbar() {
-    // TODO: Add logic to show/hide Login based on auth state (from AuthContext)
-    // TODO: Add Logout button
     return (
-        <nav className="bg-primary text-white shadow-md">
-            <ul className="container mx-auto px-4 py-3 flex space-x-4">
-                <li>
-                    <Link href="/" className="hover:text-gray-300">Home (Decks)</Link>
-                </li>
-                <li>
-                    <Link href="/login" className="hover:text-gray-300">Login</Link>
-                </li>
-            </ul>
-        </nav>
+        <header className="bg-gray-100 p-4 shadow-md border-b border-gray-200">
+            <nav className="container mx-auto flex justify-between items-center">
+                <Link href="/" className="text-xl font-bold text-primary">
+                    Anki Clone
+                </Link>
+                <div>
+                    {token ? (
+                        <button
+                            onClick={logout}
+                            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                        >
+                            Logout
+                        </button>
+                    ) : (
+                        <Link
+                            href="/login"
+                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                        >
+                            Login
+                        </Link>
+                    )}
+                </div>
+            </nav>
+        </header>
     );
 }
 
@@ -42,14 +47,15 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en">
-            <body className={`${inter.className} min-h-screen flex flex-col`}>
-                <AppProviders> { /* Wrap content with providers */}
-                    <Navbar />
-                    <main className="flex-grow container mx-auto px-4 py-8">
+            <body className={`${inter.className} bg-gray-50 text-gray-900`}>
+                {/* Use AppProviders to wrap everything */}
+                <AppProviders>
+                    <AppHeader />
+                    <main className="container mx-auto p-4 md:p-6">
                         {children}
                     </main>
-                    <footer className="bg-gray-200 dark:bg-gray-800 text-center py-4 mt-auto">
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Anki Website Footer</p>
+                    <footer className="text-center text-gray-500 py-4 mt-8 border-t border-gray-200">
+                        © {new Date().getFullYear()} Anki Clone
                     </footer>
                 </AppProviders>
             </body>

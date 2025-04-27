@@ -11,7 +11,7 @@ import {
     useDeleteCardMutation
 } from '@/hooks/queryHooks';
 import Button from '@/components/Button';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/context/useAuth';
 // Import shared types
 import type { Card /*, Deck */ } from '@/types'; // Removed unused Deck import
 
@@ -51,29 +51,29 @@ function CardFormModal({ isOpen, onClose, onSubmit, initialData, isLoading, titl
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-md">
-                <h2 className="text-xl font-semibold mb-4">{title}</h2>
+            <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+                <h2 className="text-xl font-semibold mb-4 text-gray-900">{title}</h2>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label htmlFor="front-text" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Front Text</label>
+                        <label htmlFor="front-text" className="block text-sm font-medium text-gray-700">Front Text</label>
                         <textarea
                             id="front-text"
                             rows={3}
                             value={front}
                             onChange={(e) => setFront(e.target.value)}
                             required
-                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
                         />
                     </div>
                     <div>
-                        <label htmlFor="back-text" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Back Text</label>
+                        <label htmlFor="back-text" className="block text-sm font-medium text-gray-700">Back Text</label>
                         <textarea
                             id="back-text"
                             rows={3}
                             value={back}
                             onChange={(e) => setBack(e.target.value)}
                             required
-                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
                         />
                     </div>
                     <div className="flex justify-end space-x-2 pt-4">
@@ -160,14 +160,14 @@ export default function EditDeckPage() {
 
     // Loading/Error states
     if (deckId === undefined) {
-        return <div className="text-center text-red-500 dark:text-red-400">Invalid Deck ID</div>;
+        return <div className="text-center text-red-500">Invalid Deck ID</div>;
     }
     const isLoading = deckLoading || cardsLoading;
     const mutationLoading = createCardMutation.isPending || updateCardMutation.isPending || deleteCardMutation.isPending;
     const error = deckError || cardsError || createCardMutation.error || updateCardMutation.error || deleteCardMutation.error;
 
-    if (isLoading && (!deck || !cards)) return <div className="text-center text-gray-500 dark:text-gray-400">Loading deck details...</div>;
-    if (error) return <div className="text-center text-red-500 dark:text-red-400">Error: {error.message || 'Unknown error'}</div>;
+    if (isLoading && (!deck || !cards)) return <div className="text-center text-gray-500">Loading deck details...</div>;
+    if (error) return <div className="text-center text-red-500">Error: {error.message || 'Unknown error'}</div>;
 
     return (
         <div className="space-y-6 pb-12">
@@ -180,22 +180,22 @@ export default function EditDeckPage() {
                     {/* TODO: Add Edit Deck Name Button/Modal */}
                 </div>
             </div>
-            <hr className="border-gray-300 dark:border-gray-700" />
+            <hr className="border-gray-300" />
 
             {token ? (
                 <Button onClick={openAddModal} variant="primary" disabled={mutationLoading}>
                     Add New Card
                 </Button>
             ) : (
-                <p className="text-center text-gray-500 dark:text-gray-400">Please login to manage cards.</p>
+                <p className="text-center text-gray-500">Please login to manage cards.</p>
             )}
 
-            <h2 className="text-2xl font-semibold">Cards in Deck</h2>
-            {cardsLoading && <div className="text-center text-gray-500 dark:text-gray-400">Loading cards...</div>}
+            <h2 className="text-2xl font-semibold text-gray-900">Cards in Deck</h2>
+            {cardsLoading && <div className="text-center text-gray-500">Loading cards...</div>}
             {!cardsLoading && cards && cards.length > 0 ? (
                 <ul className="space-y-4">
                     {cards.map(card => (
-                        <li key={card.id} className="p-4 bg-white dark:bg-gray-800 rounded shadow space-y-2">
+                        <li key={card.id} className="p-4 bg-white rounded shadow space-y-2">
                             <div><strong className="font-medium">Front:</strong> {card.front_text}</div>
                             <div><strong className="font-medium">Back:</strong> {card.back_text}</div>
                             {token && (
@@ -216,7 +216,7 @@ export default function EditDeckPage() {
                     ))}
                 </ul>
             ) : (
-                !cardsLoading && <p className="text-center text-gray-500 dark:text-gray-400">No cards in this deck yet. {token ? 'Add one above!' : 'Login to add cards.'}</p>
+                !cardsLoading && <p className="text-center text-gray-500">No cards in this deck yet. {token ? 'Add one above!' : 'Login to add cards.'}</p>
             )}
 
             {/* Add Card Modal */}

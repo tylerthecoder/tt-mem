@@ -1,9 +1,8 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-// Remove old client import
-// import { loginUser as apiLogin } from '../api/client';
+"use client";
+import React, { createContext, useState, ReactNode, useEffect } from 'react';
 import { loginUserAction } from '@/actions/auth'; // Import server action
 
-interface AuthContextType {
+export interface AuthContextType {
     token: string | null;
     login: (password: string) => Promise<void>; // Keep promise for async handling
     logout: () => void;
@@ -11,7 +10,7 @@ interface AuthContextType {
     error: string | null;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [token, setToken] = useState<string | null>(null);
@@ -69,10 +68,3 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     );
 };
 
-export const useAuth = (): AuthContextType => {
-    const context = useContext(AuthContext);
-    if (context === undefined) {
-        throw new Error('useAuth must be used within an AuthProvider');
-    }
-    return context;
-};
