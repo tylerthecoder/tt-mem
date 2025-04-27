@@ -1,18 +1,20 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import Button from '../components/Button';
+'use client';
 
-const LoginPage: React.FC = () => {
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
+import Button from '@/components/Button';
+
+export default function LoginPage() {
     const [password, setPassword] = useState<string>('');
     const { login, isLoading, error } = useAuth();
-    const navigate = useNavigate();
+    const router = useRouter();
 
     const handleLogin = async (event: React.FormEvent) => {
         event.preventDefault();
         try {
             await login(password);
-            navigate('/');
+            router.push('/');
         } catch (err) {
             console.error("Login attempt failed in component:", err);
         }
@@ -53,6 +55,4 @@ const LoginPage: React.FC = () => {
             </form>
         </div>
     );
-};
-
-export default LoginPage;
+}

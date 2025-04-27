@@ -1,0 +1,8 @@
+/* Import Tailwind CSS v4 */
+@import "tailwindcss";
+
+/* Define theme customizations */
+@theme {
+  --color-primary: #DC2626; /* Red-600 */
+  --color-secondary: #16A34A; /* Green-600 */
+}

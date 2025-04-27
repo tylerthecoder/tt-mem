@@ -1,9 +1,11 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import { loginUser as apiLogin } from '../api/client'; // Import the actual API call
+// Remove old client import
+// import { loginUser as apiLogin } from '../api/client';
+import { loginUserAction } from '@/actions/auth'; // Import server action
 
 interface AuthContextType {
     token: string | null;
-    login: (password: string) => Promise<void>;
+    login: (password: string) => Promise<void>; // Keep promise for async handling
     logout: () => void;
     isLoading: boolean;
     error: string | null;
@@ -24,17 +26,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }, []);
 
-    const login = async (password: string) => {
+    const login = async (password: string): Promise<void> => { // Return Promise<void>
         setIsLoading(true);
         setError(null);
         try {
-            const response = await apiLogin(password);
-            if (response.token) {
-                setToken(response.token);
-                localStorage.setItem('authToken', response.token); // Persist token
+            // Call the server action
+            const result = await loginUserAction(password);
+
+            if (result.success && result.token) {
+                setToken(result.token);
+                localStorage.setItem('authToken', result.token); // Persist token
                 setError(null); // Clear error on success
+                // No need to return anything on success
             } else {
-                throw new Error("Login failed: No token received");
+                // Throw an error with the message from the action result
+                throw new Error(result.message || "Login failed: Unknown error");
             }
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
@@ -42,8 +48,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setError(errorMessage);
             setToken(null); // Ensure token is null on error
             localStorage.removeItem('authToken'); // Clear any potentially invalid token
-            // Re-throw or handle as needed for UI feedback
-            throw err; // Re-throw to allow login page to handle mutation state
+            // Re-throw to allow login page to handle errors
+            throw err;
         } finally {
             setIsLoading(false);
         }

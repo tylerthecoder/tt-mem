@@ -1,7 +1,10 @@
+'use client';
+
 import React from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { useDeckCards, useDeck } from '../hooks/queryHooks';
-import Button from '../components/Button';
+import { useParams /*, useRouter */ } from 'next/navigation';
+import Link from 'next/link';
+import { useDeckCards, useDeck } from '@/hooks/queryHooks';
+import Button from '@/components/Button';
 
 // Inline Card type needed because useDeckCards uses mock data / inline types
 interface Card {
@@ -10,33 +13,40 @@ interface Card {
     back_text: string;
 }
 
-const EditDeckPage: React.FC = () => {
-    const { deckId } = useParams<{ deckId: string }>();
+export default function EditDeckPage() {
+    const params = useParams();
+    const deckId = typeof params?.deckId === 'string' ? params.deckId : undefined;
 
-    // Fetch deck details (for name)
+    // Use the real hook for deck details
     const { data: deck, isLoading: deckLoading, error: deckError } = useDeck(deckId);
 
     // Fetch cards (currently mock)
     const { data: cards, isLoading: cardsLoading, error: cardsError }: { data: Card[], isLoading: boolean, error: null } = useDeckCards(deckId);
 
-    // TODO: Implement functions for adding, editing, deleting cards
+    // TODO: Implement functions for adding, editing, deleting cards using Server Actions
     const handleAddCard = () => console.log('Add card clicked');
     const handleEditCard = (cardId: string) => console.log('Edit card:', cardId);
     const handleDeleteCard = (cardId: string) => console.log('Delete card:', cardId);
 
-    // Combined loading state
+    // TODO: Add update deck name functionality using useUpdateDeckMutation
+
+    if (deckId === undefined) {
+        return <div className="text-center text-red-500 dark:text-red-400">Invalid Deck ID</div>;
+    }
+
+    // Combined loading state - use real deck loading
     if (deckLoading || cardsLoading) return <div className="text-center text-gray-500 dark:text-gray-400">Loading deck details...</div>;
 
-    // Combined error state
-    if (deckError) return <div className="text-center text-red-500 dark:text-red-400">Error loading deck: {deckError.message}</div>;
-    if (cardsError) return <div className="text-center text-red-500 dark:text-red-400">An error occurred loading cards.</div>; // Generic message for mock hook error
+    // Combined error state - use real deck error
+    if (deckError) return <div className="text-center text-red-500 dark:text-red-400">Error loading deck: {deckError.message || 'Unknown error'}</div>;
+    if (cardsError) return <div className="text-center text-red-500 dark:text-red-400">An error occurred loading cards.</div>;
 
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold text-primary">Edit Deck: {deck?.name || deckId}</h1>
-                <Link to={`/deck/${deckId}/play`}>
-                    <Button variant="secondary">Play this Deck</Button>
+                <Link href={`/deck/${deckId}/play`} passHref legacyBehavior>
+                    <Button as="a" variant="secondary">Play this Deck</Button>
                 </Link>
             </div>
             <hr className="border-gray-300 dark:border-gray-700" />
@@ -61,6 +71,4 @@ const EditDeckPage: React.FC = () => {
             {/* TODO: Add forms/modals for adding/editing cards */}
         </div>
     );
-};
-
-export default EditDeckPage;
+}

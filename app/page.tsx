@@ -1,14 +1,17 @@
+'use client'; // Mark as client component
+
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import Link from 'next/link'; // Use Next.js Link
 import {
-    useDecks,
+    useDecks, // Use the hook again
     useCreateDeckMutation,
     useDeleteDeckMutation,
-} from '../hooks/queryHooks';
-import Button from '../components/Button';
-import { useAuth } from '../context/AuthContext'; // Needed to check if logged in for mutations
+} from '@/hooks/queryHooks'; // Use path alias
+import Button from '@/components/Button'; // Use path alias
+import { useAuth } from '@/context/AuthContext'; // Use path alias
 
-// Inline Deck type (until imports are fixed)
+
+// Inline Deck type (mirroring definition in queryHooks for now)
 interface Deck {
     id: string;
     name: string;
@@ -16,23 +19,25 @@ interface Deck {
     updated_at?: string;
 }
 
-const HomePage: React.FC = () => {
-    const { data: decks, isLoading, error } = useDecks(); // Use the hook to fetch decks
+// Renamed component to follow Next.js conventions (PascalCase)
+export default function HomePage() {
+    // Use the real hook for fetching
+    const { data: decks, isLoading, error } = useDecks();
     const createDeckMutation = useCreateDeckMutation();
     const deleteDeckMutation = useDeleteDeckMutation();
-    const { token } = useAuth(); // Get token to conditionally render/enable actions
+    const { token } = useAuth();
 
     const [newDeckName, setNewDeckName] = useState('');
 
     const handleCreateDeck = (event: React.FormEvent) => {
         event.preventDefault();
-        if (!newDeckName.trim() || !token) return; // Need auth and name
+        if (!newDeckName.trim() || !token) return;
+        // Pass token to the mutation variables
         createDeckMutation.mutate(
-            { name: newDeckName.trim() },
+            { name: newDeckName.trim(), token },
             {
                 onSuccess: () => {
-                    setNewDeckName(''); // Clear input on success
-                    // Optionally add user feedback
+                    setNewDeckName('');
                 },
                 onError: (err) => {
                     console.error("Failed to create deck:", err);
@@ -43,9 +48,10 @@ const HomePage: React.FC = () => {
     };
 
     const handleDeleteDeck = (deckId: string) => {
-        if (!token) return; // Need auth
+        if (!token) return;
         if (window.confirm('Are you sure you want to delete this deck?')) {
-            deleteDeckMutation.mutate({ deckId }, {
+            // Pass token to the mutation variables
+            deleteDeckMutation.mutate({ deckId, token }, {
                 onError: (err) => {
                     console.error("Failed to delete deck:", err);
                     alert(`Failed to delete deck: ${err.message}`);
@@ -58,7 +64,7 @@ const HomePage: React.FC = () => {
         <div className="space-y-6">
             <h1 className="text-3xl font-bold text-primary">My Decks</h1>
 
-            {/* Create New Deck Form (Only show/enable if logged in) */}
+            {/* Create New Deck Form */}
             {token && (
                 <form onSubmit={handleCreateDeck} className="flex space-x-2 items-end p-4 bg-gray-100 dark:bg-gray-800 rounded shadow">
                     <div className="flex-grow">
@@ -84,27 +90,28 @@ const HomePage: React.FC = () => {
                 </form>
             )}
             {!token && (
-                <p className="text-center text-gray-500 dark:text-gray-400">Please <Link to="/login" className="text-primary underline">login</Link> to create or manage decks.</p>
+                <p className="text-center text-gray-500 dark:text-gray-400">Please <Link href="/login" className="text-primary underline">login</Link> to create or manage decks.</p>
             )}
 
-            {/* Deck List */}
+            {/* Deck List - Use real loading/error states */}
             {isLoading && <div className="text-center text-gray-500 dark:text-gray-400">Loading decks...</div>}
-            {error && <div className="text-center text-red-500 dark:text-red-400">Error loading decks: {error.message}</div>}
+            {error && <div className="text-center text-red-500 dark:text-red-400">Error loading decks: {error.message || 'Unknown error'}</div>}
             {!isLoading && !error && decks && (
                 <ul className="space-y-3">
-                    {decks.map((deck: Deck) => ( // Add type annotation
+                    {decks.map((deck: Deck) => (
                         <li
                             key={deck.id}
                             className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 rounded shadow"
                         >
                             <span className="font-medium text-lg">{deck.name}</span>
                             <div className="space-x-2">
-                                <Link to={`/deck/${deck.id}/play`} className="px-3 py-1 rounded text-sm transition-colors bg-secondary text-white hover:bg-green-700">Play</Link>
-                                <Link to={`/deck/${deck.id}/edit`} className="px-3 py-1 rounded text-sm transition-colors bg-gray-500 text-white hover:bg-gray-600">Edit</Link>
-                                {token && ( // Only show delete if logged in
+                                {/* Use Next.js Link with href */}
+                                <Link href={`/deck/${deck.id}/play`} passHref legacyBehavior><Button as="a" variant="secondary" size="sm">Play</Button></Link>
+                                <Link href={`/deck/${deck.id}/edit`} passHref legacyBehavior><Button as="a" variant="default" size="sm">Edit</Button></Link>
+                                {token && (
                                     <Button
                                         onClick={() => handleDeleteDeck(deck.id)}
-                                        variant="primary" // Use primary red for delete? Consider a 'danger' variant
+                                        variant="primary" // Consider a 'danger' variant
                                         size="sm"
                                         disabled={deleteDeckMutation.isPending && deleteDeckMutation.variables?.deckId === deck.id}
                                     >
@@ -121,6 +128,4 @@ const HomePage: React.FC = () => {
             )}
         </div>
     );
-};
-
-export default HomePage;
+}
