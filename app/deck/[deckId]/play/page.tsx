@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Button from '@/components/Button';
-import { useDeckCards, useCreateReviewEventMutation } from '@/hooks/queryHooks';
+import { useDeckCards, useCreateReviewEventMutation, useDeck } from '@/hooks/queryHooks';
 import { ReviewResult, Card } from '@/types';
 
 // Helper function to shuffle array
@@ -26,6 +26,7 @@ export default function PlayDeckPage() {
 
     const { data: cards, isLoading: isLoadingCards, error: cardsError } = useDeckCards(deckId);
     const createReviewMutation = useCreateReviewEventMutation();
+    const { data: deck, isLoading: deckLoading } = useDeck(deckId);
 
     const [currentCardIndex, setCurrentCardIndex] = useState<number>(0);
     const [showTarget, setShowTarget] = useState<boolean>(false);
@@ -68,35 +69,37 @@ export default function PlayDeckPage() {
         });
     };
 
-    const isLoading = isLoadingCards;
+    const isLoading = isLoadingCards || deckLoading;
     if (deckId === undefined) {
         return <div className="text-center text-red-500">Invalid Deck ID</div>;
     }
-    if (isLoading && !cards) {
-        return <div className="text-center text-gray-500">Loading deck...</div>;
+    if (isLoading && (!cards || !deck)) {
+        return <div className="text-center text-gray-500 py-10">Loading deck...</div>;
     }
     if (cardsError) {
-        return <div className="text-center text-red-500">Error loading deck: {cardsError.message || 'Unknown error'}.</div>;
+        return <div className="text-center text-red-500 p-4 bg-red-50 rounded border border-red-200">Error loading deck: {cardsError.message || 'Unknown error'}.</div>;
     }
     if (!isLoading && (!reviewSequence || reviewSequence.length === 0)) {
-        return <div className="text-center text-gray-500">Deck is empty. <Link href={`/deck/${deckId}/edit`} className="text-primary underline">Add cards</Link></div>;
+        return <div className="text-center text-gray-500 py-10">Deck is empty. <Link href={`/deck/${deckId}/edit`} className="text-primary underline hover:text-red-700">Add cards</Link></div>;
     }
     if (!reviewSequence) return null;
 
     if (currentCardIndex >= reviewSequence.length) {
         return (
-            <div className="text-center space-y-4">
-                <p className="text-xl font-semibold">Deck finished!</p>
-                <Button onClick={() => {
-                    setCurrentCardIndex(0);
-                    setShowTarget(false);
-                }} variant="secondary">Play Again</Button>
-                <Link href={`/deck/${deckId}/overview`} passHref legacyBehavior>
-                    <Button as="a" variant="default">Overview & History</Button>
-                </Link>
-                <Link href={`/`} passHref legacyBehavior>
-                    <Button as="a" variant="default">Back to Decks</Button>
-                </Link>
+            <div className="text-center space-y-6 py-10">
+                <p className="text-2xl font-semibold text-green-600">Deck finished!</p>
+                <div className="flex flex-wrap justify-center gap-3">
+                    <Button onClick={() => {
+                        setCurrentCardIndex(0);
+                        setShowTarget(false);
+                    }} variant="secondary">Play Again {shouldRandomize ? '(Randomized)' : ''}</Button>
+                    <Link href={`/deck/${deckId}/overview`} passHref legacyBehavior>
+                        <Button as="a" variant="default">Back to Overview</Button>
+                    </Link>
+                    <Link href={`/`} passHref legacyBehavior>
+                        <Button as="a" variant="default">Back to Decks</Button>
+                    </Link>
+                </div>
             </div>
         );
     }
@@ -111,12 +114,12 @@ export default function PlayDeckPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center gap-4">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
                 <Link href={`/deck/${deckId}/overview`} className="text-sm text-primary hover:underline whitespace-nowrap">
                     &larr; Overview
                 </Link>
-                <h1 className="text-xl font-semibold text-gray-700 flex-grow text-center">
-                    Playing Deck {isFlipped ? '(Flipped)' : ''} {shouldRandomize ? '(Randomized)' : ''}
+                <h1 className="text-lg sm:text-xl font-semibold text-gray-700 text-center order-first sm:order-none">
+                    Playing: <span className="text-primary font-bold">{deck?.name || '...'}</span> {isFlipped ? '(Flipped)' : ''} {shouldRandomize ? '(Randomized)' : ''}
                 </h1>
                 <Link href={`/deck/${deckId}/edit`} passHref legacyBehavior>
                     <Button as="a" variant="default" size="sm" className="whitespace-nowrap">Edit Deck</Button>
@@ -124,31 +127,35 @@ export default function PlayDeckPage() {
             </div>
             <hr className="border-gray-300" />
 
-            <div className="bg-white p-6 rounded shadow-lg text-center space-y-4 min-h-[250px] flex flex-col justify-between">
+            <div className="bg-white p-6 rounded-lg shadow-lg text-center space-y-6 min-h-[300px] sm:min-h-[350px] flex flex-col justify-between">
                 <div>
-                    <h2 className="text-lg font-semibold text-gray-500 mb-4">
+                    <h2 className="text-base font-semibold text-gray-500 mb-4">
                         Card {currentCardIndex + 1} / {reviewSequence.length}
                     </h2>
-                    <p className="text-2xl font-medium mb-4 min-h-[3em] whitespace-pre-wrap text-gray-900">{initialText}</p>
-                    {showTarget && (
-                        <p className="text-xl text-secondary min-h-[2.5em] whitespace-pre-wrap">{targetText}</p>
-                    )}
+                    <p className="text-2xl sm:text-3xl font-medium mb-4 min-h-[3em] flex items-center justify-center whitespace-pre-wrap text-gray-900">{initialText}</p>
                 </div>
-                <div className="pt-4 border-t border-gray-200">
-                    {showTarget ? (
-                        <div className="space-y-3">
-                            <p className="font-medium text-gray-700">How well did you know it?</p>
-                            <div className="flex flex-wrap justify-center gap-2">
-                                <Button onClick={() => handleReview(ReviewResult.EASY)} variant="easy" size="sm" disabled={createReviewMutation.isPending}>Easy</Button>
-                                <Button onClick={() => handleReview(ReviewResult.MEDIUM)} variant="medium" size="sm" disabled={createReviewMutation.isPending}>Medium</Button>
-                                <Button onClick={() => handleReview(ReviewResult.HARD)} variant="hard" size="sm" disabled={createReviewMutation.isPending}>Hard</Button>
-                                <Button onClick={() => handleReview(ReviewResult.MISSED)} variant="missed" size="sm" disabled={createReviewMutation.isPending}>Missed</Button>
+                <div className="space-y-4">
+                    <div className="min-h-[3em] flex items-center justify-center">
+                        {showTarget && (
+                            <p className="text-xl sm:text-2xl text-secondary whitespace-pre-wrap">{targetText}</p>
+                        )}
+                    </div>
+                    <div className="pt-4 border-t border-gray-200">
+                        {showTarget ? (
+                            <div className="space-y-4">
+                                <p className="font-medium text-gray-700">How well did you know it?</p>
+                                <div className="flex flex-wrap justify-center gap-3">
+                                    <Button onClick={() => handleReview(ReviewResult.EASY)} variant="easy" size="sm" disabled={createReviewMutation.isPending}>Easy</Button>
+                                    <Button onClick={() => handleReview(ReviewResult.MEDIUM)} variant="medium" size="sm" disabled={createReviewMutation.isPending}>Medium</Button>
+                                    <Button onClick={() => handleReview(ReviewResult.HARD)} variant="hard" size="sm" disabled={createReviewMutation.isPending}>Hard</Button>
+                                    <Button onClick={() => handleReview(ReviewResult.MISSED)} variant="missed" size="sm" disabled={createReviewMutation.isPending}>Missed</Button>
+                                </div>
+                                {createReviewMutation.isPending && <p className="text-sm text-gray-500 pt-2">Recording...</p>}
                             </div>
-                            {createReviewMutation.isPending && <p className="text-sm text-gray-500">Recording...</p>}
-                        </div>
-                    ) : (
-                        <Button onClick={handleShowTarget} variant="secondary" disabled={createReviewMutation.isPending}>Show {isFlipped ? 'Front' : 'Back'}</Button>
-                    )}
+                        ) : (
+                            <Button onClick={handleShowTarget} variant="secondary" disabled={createReviewMutation.isPending}>Show {isFlipped ? 'Front' : 'Back'}</Button>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

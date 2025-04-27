@@ -165,14 +165,14 @@ export default function EditDeckPage() {
     const mutationLoading = createCardMutation.isPending || updateCardMutation.isPending || deleteCardMutation.isPending;
     const error = deckError || cardsError || createCardMutation.error || updateCardMutation.error || deleteCardMutation.error;
 
-    if (isLoading && (!deck || !cards)) return <div className="text-center text-gray-500">Loading deck details...</div>;
-    if (error) return <div className="text-center text-red-500">Error: {error.message || 'Unknown error'}</div>;
+    if (isLoading && (!deck || !cards)) return <div className="text-center text-gray-500 py-10">Loading deck details...</div>;
+    if (error) return <div className="text-center text-red-500 p-4 bg-red-50 rounded border border-red-200">Error: {error.message || 'Unknown error'}</div>;
 
     return (
-        <div className="space-y-6 pb-12">
-            <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold text-primary truncate">Edit Deck: {deck?.name || deckId}</h1>
-                <div className="flex space-x-2">
+        <div className="space-y-8 pb-12">
+            <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
+                <h1 className="text-2xl sm:text-3xl font-bold text-primary break-words">Edit Deck: {deck?.name || deckId}</h1>
+                <div className="flex space-x-2 self-end sm:self-center flex-shrink-0">
                     <Link href={`/deck/${deckId}/overview`} passHref legacyBehavior>
                         <Button as="a" variant="secondary">Back to Overview</Button>
                     </Link>
@@ -189,16 +189,16 @@ export default function EditDeckPage() {
                 <p className="text-center text-gray-500">Please login to manage cards.</p>
             )}
 
-            <h2 className="text-2xl font-semibold text-gray-900">Cards in Deck</h2>
-            {cardsLoading && <div className="text-center text-gray-500">Loading cards...</div>}
+            <h2 className="text-2xl font-semibold text-gray-900 pt-4">Cards in Deck</h2>
+            {cardsLoading && <div className="text-center text-gray-500 py-6">Loading cards...</div>}
             {!cardsLoading && cards && cards.length > 0 ? (
                 <ul className="space-y-4">
                     {cards.map(card => (
-                        <li key={card.id} className="p-4 bg-white rounded shadow space-y-2">
-                            <div><strong className="font-medium">Front:</strong> {card.front_text}</div>
-                            <div><strong className="font-medium">Back:</strong> {card.back_text}</div>
+                        <li key={card.id} className="p-4 bg-white rounded-lg shadow space-y-3">
+                            <div className="whitespace-pre-wrap"><strong className="font-medium text-gray-700">Front:</strong> {card.front_text}</div>
+                            <div className="whitespace-pre-wrap"><strong className="font-medium text-gray-700">Back:</strong> {card.back_text}</div>
                             {token && (
-                                <div className="flex space-x-2 pt-2">
+                                <div className="flex flex-wrap gap-2 pt-2">
                                     <Button onClick={() => openEditModal(card)} variant="default" size="sm" disabled={mutationLoading}>Edit</Button>
                                     <Button
                                         onClick={() => handleDeleteCard(card.id)}
@@ -215,10 +215,9 @@ export default function EditDeckPage() {
                     ))}
                 </ul>
             ) : (
-                !cardsLoading && <p className="text-center text-gray-500">No cards in this deck yet. {token ? 'Add one above!' : 'Login to add cards.'}</p>
+                !cardsLoading && <p className="text-center text-gray-500 py-6">No cards in this deck yet. {token ? 'Add one above!' : 'Login to add cards.'}</p>
             )}
 
-            {/* Add Card Modal */}
             <CardFormModal
                 isOpen={isAddModalOpen}
                 onClose={() => setIsAddModalOpen(false)}
@@ -227,7 +226,6 @@ export default function EditDeckPage() {
                 title="Add New Card"
             />
 
-            {/* Edit Card Modal */}
             <CardFormModal
                 isOpen={isEditModalOpen}
                 onClose={() => { setIsEditModalOpen(false); setEditingCard(null); }}

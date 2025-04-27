@@ -215,12 +215,12 @@ export default function HomePage() {
     const error = decksError || createDeckMutation.error || deleteDeckMutation.error || importDeckMutation.error;
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-8">
             <h1 className="text-3xl font-bold text-primary">My Decks</h1>
 
-            {/* Action Buttons */}
+            {/* Action Buttons Group */}
             {token && (
-                <div className="flex space-x-2">
+                <div className="flex flex-wrap gap-2">
                     {/* Button to open import modal */}
                     <Button variant="secondary" onClick={() => setIsImportModalOpen(true)} disabled={isLoading}>
                         Import Deck from JSON
@@ -230,7 +230,7 @@ export default function HomePage() {
 
             {/* Create New Deck Form */}
             {token && (
-                <form onSubmit={handleCreateDeck} className="flex space-x-2 items-end p-4 bg-gray-100 rounded shadow">
+                <form onSubmit={handleCreateDeck} className="flex flex-col sm:flex-row sm:items-end gap-3 p-4 sm:p-6 bg-white rounded-lg shadow">
                     <div className="flex-grow">
                         <label htmlFor="new-deck-name" className="block text-sm font-medium text-gray-700 mb-1">New Deck Name</label>
                         <input
@@ -240,7 +240,7 @@ export default function HomePage() {
                             onChange={(e) => setNewDeckName(e.target.value)}
                             placeholder="Enter deck name..."
                             required
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary focus:border-primary"
                             disabled={createDeckMutation.isPending}
                         />
                     </div>
@@ -248,28 +248,28 @@ export default function HomePage() {
                         type="submit"
                         variant="primary"
                         disabled={createDeckMutation.isPending || !newDeckName.trim()}
+                        className="flex-shrink-0"
                     >
                         {createDeckMutation.isPending ? 'Creating...' : 'Create Deck'}
                     </Button>
                 </form>
             )}
             {!token && (
-                <p className="text-center text-gray-500">Please <Link href="/login" className="text-primary underline">login</Link> to create or manage decks.</p>
+                <p className="text-center text-gray-500">Please <Link href="/login" className="text-primary underline hover:text-red-700">login</Link> to create or manage decks.</p>
             )}
 
-            {/* Deck List - Use real loading/error states */}
-            {decksLoading && <div className="text-center text-gray-500">Loading decks...</div>}
-            {error && <div className="text-center text-red-500">Error loading data: {error.message || 'Unknown error'}</div>}
+            {/* Deck List */}
+            {decksLoading && <div className="text-center text-gray-500 py-6">Loading decks...</div>}
+            {error && <div className="text-center text-red-500 p-4 bg-red-50 rounded border border-red-200">Error loading data: {error.message || 'Unknown error'}</div>}
             {!decksLoading && !error && decks && (
-                <ul className="space-y-3">
+                <ul className="space-y-4">
                     {decks.map((deck: Deck) => (
                         <li
                             key={deck.id}
-                            className="flex items-center justify-between p-4 bg-white rounded shadow"
+                            className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 sm:p-5 bg-white rounded-lg shadow"
                         >
-                            <span className="font-medium text-lg text-gray-900">{deck.name}</span>
-                            <div className="space-x-2">
-                                {/* Update Play link to point to /overview */}
+                            <span className="font-medium text-lg text-gray-900 break-words flex-grow">{deck.name}</span>
+                            <div className="flex flex-shrink-0 flex-wrap gap-2 mt-2 sm:mt-0 self-end sm:self-center">
                                 <Link href={`/deck/${deck.id}/overview`} passHref legacyBehavior><Button as="a" variant="secondary" size="sm">Play</Button></Link>
                                 <Link href={`/deck/${deck.id}/edit`} passHref legacyBehavior><Button as="a" variant="default" size="sm">Edit</Button></Link>
                                 {token && (
@@ -286,16 +286,16 @@ export default function HomePage() {
                         </li>
                     ))}
                     {decks.length === 0 && (
-                        <p className="text-center text-gray-500">No decks found. {token ? 'Create one above!' : 'Login to create decks.'}</p>
+                        <p className="text-center text-gray-500 py-6">No decks found. {token ? 'Create one above!' : 'Login to create decks.'}</p>
                     )}
                 </ul>
             )}
 
-            {/* Render the Import Deck Modal */}
+            {/* Import Deck Modal */}
             <ImportDeckModal
-                isOpen={isImportModalOpen} // Use state variable
-                onClose={() => setIsImportModalOpen(false)} // Use state setter
-                onSubmit={handleImportDeckSubmit} // Use handler
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+                onSubmit={handleImportDeckSubmit}
                 isLoading={importDeckMutation.isPending}
             />
         </div>
