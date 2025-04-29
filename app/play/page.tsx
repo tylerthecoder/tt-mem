@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useCardsForReview, useCreateReviewEventMutation } from '@/hooks/queryHooks';
@@ -19,7 +19,8 @@ function buildPlayQueryString(currentParams: URLSearchParams, newParams: Record<
     return params.toString();
 }
 
-export default function GlobalPlayPage() {
+// Original page content moved to this client component
+function PlayPageClientContent() {
     const searchParams = useSearchParams();
     const { token, isLoading: isAuthLoading } = useAuth();
 
@@ -59,7 +60,6 @@ export default function GlobalPlayPage() {
                 onSuccess: () => {
                     const nextIndex = currentCardIndex + 1;
                     setCurrentCardIndex(nextIndex);
-                    // Don't automatically refetch, let user decide to play again
                 },
                 onError: (err) => {
                     alert(`Failed to record review: ${err.message}`);
@@ -69,11 +69,10 @@ export default function GlobalPlayPage() {
     };
 
     const handlePlayAgain = () => {
-        refetch(); // Refetch the card sequence
+        refetch();
         setCurrentCardIndex(0);
     };
 
-    // Determine loading state
     const isLoading = isAuthLoading || isLoadingCards;
 
     if (isLoading) {
@@ -106,7 +105,6 @@ export default function GlobalPlayPage() {
         );
     }
 
-    // Finished state
     if (currentCardIndex >= reviewSequence.length) {
         return (
             <div className="text-center space-y-6 py-10">
@@ -133,13 +131,12 @@ export default function GlobalPlayPage() {
                 <h1 className="text-lg sm:text-xl font-semibold text-gray-700 text-center order-first sm:order-none">
                     Reviewing All Decks ({strategy === 'missedFirst' ? 'Missed First' : 'Random'}, {limit})
                 </h1>
-                {/* Strategy Switch Links */}
                 <div className="text-center sm:text-right text-xs sm:min-w-[100px]">
                     {strategy === 'random' ? (
                         <Link
                             href={`/play?${buildPlayQueryString(searchParams, { strategy: 'missedFirst' })}`}
                             className="text-primary hover:underline"
-                            replace // Use replace to avoid bloating history
+                            replace
                         >
                             Switch to Missed First
                         </Link>
@@ -147,12 +144,11 @@ export default function GlobalPlayPage() {
                         <Link
                             href={`/play?${buildPlayQueryString(searchParams, { strategy: 'random' })}`}
                             className="text-primary hover:underline"
-                            replace // Use replace to avoid bloating history
+                            replace
                         >
                             Switch to Random
                         </Link>
                     )}
-                    {/* TODO: Add options for limit, flipped? */}
                 </div>
             </div>
             <hr className="border-gray-300" />
@@ -168,5 +164,23 @@ export default function GlobalPlayPage() {
                 isPendingReview={createReviewMutation.isPending}
             />
         </div>
+    );
+}
+
+// Loading component for Suspense fallback
+function LoadingState() {
+    return (
+        <div className="flex justify-center items-center py-10">
+            <Spinner /> <span className="ml-2 text-gray-500">Loading play options...</span>
+        </div>
+    );
+}
+
+// Default export is now the server component wrapping the client component in Suspense
+export default function GlobalPlayPage() {
+    return (
+        <Suspense fallback={<LoadingState />}>
+            <PlayPageClientContent />
+        </Suspense>
     );
 }
