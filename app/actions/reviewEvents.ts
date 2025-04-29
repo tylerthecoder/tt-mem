@@ -3,6 +3,8 @@
 import { ObjectId } from 'mongodb';
 import { connectToDatabase } from '@/lib/db';
 import { ReviewEventDocument, ReviewResult, CardDocument } from '@/types';
+import type { ReviewEvent } from '@/types'; // Import client-side type
+import { mapMongoId } from '@/lib/utils'; // Import the mapper
 
 interface LastReviewResult {
     cardId: string;
@@ -68,5 +70,61 @@ export async function getLastReviewEventPerCard(deckId: string): Promise<Map<str
     } catch (error) {
         console.error("Error fetching last review events:", error);
         throw new Error("Failed to fetch review history.");
+    }
+}
+
+// --- Fetch Latest Review For a Single Card ---
+
+interface LatestReviewResult {
+    success: boolean;
+    reviewEvent?: ReviewEvent | null;
+    message?: string;
+}
+
+// Fetches the single most recent review event for a specific card.
+export async function getLatestReviewForCardAction(cardId: string): Promise<LatestReviewResult> {
+    if (!cardId || !ObjectId.isValid(cardId)) {
+        return { success: false, message: 'Invalid Card ID provided.' };
+    }
+
+    // TODO: Add authentication check if needed.
+
+    try {
+        const { db } = await connectToDatabase();
+        const reviewEventsCollection = db.collection<ReviewEventDocument>('review_events');
+
+        const latestEventDoc = await reviewEventsCollection.findOne(
+            { card_id: new ObjectId(cardId) },
+            { sort: { timestamp: -1 } }
+        );
+
+        if (!latestEventDoc) {
+            // It's not an error if no review exists, return success: true but null event
+            return { success: true, reviewEvent: null };
+        }
+
+        // Map the event before returning
+        const mappedEvent = mapMongoId(latestEventDoc);
+
+        // Check if mapping was successful and card_id is ObjectId (it should be)
+        if (mappedEvent?.card_id instanceof ObjectId) {
+            const finalEvent: ReviewEvent = {
+                ...mappedEvent,
+                id: mappedEvent.id, // mapMongoId already adds string id
+                card_id: mappedEvent.card_id.toString(), // Convert ObjectId to string
+                result: mappedEvent.result, // Ensure correct type
+                timestamp: mappedEvent.timestamp, // Ensure correct type
+            };
+            return { success: true, reviewEvent: finalEvent };
+        } else {
+            // Mapping failed - this indicates an issue
+            console.error(`Failed to map latest review event document for card ${cardId}. Mapped:`, mappedEvent);
+            return { success: false, message: 'Failed to process review event data.' };
+        }
+
+    } catch (error) {
+        console.error(`Error fetching latest review event for card ${cardId}:`, error);
+        const message = error instanceof Error ? error.message : 'Failed to fetch latest review event.';
+        return { success: false, message };
     }
 }

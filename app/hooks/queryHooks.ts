@@ -22,10 +22,17 @@ import {
     updateCardAction,
     deleteCardAction,
     createReviewEventAction, // Import the action
+    getCardAction, // Import the new action
+    getCardsForReviewAction, // Import the new action
 } from '@/actions/cards';
 // Import Server Actions for reviews
 import { fetchDeckReviewHistoryAction } from '@/actions/reviews'; // Import the new action
-import { getLastReviewEventPerCard } from '@/actions/reviewEvents'; // Import the new action
+import {
+    getLastReviewEventPerCard,
+    getLatestReviewForCardAction
+} from '@/actions/reviewEvents'; // Import the new actions
+import type { ReviewEvent } from '@/types'; // Import ReviewEvent type
+
 // Remove unused client functions
 // import {
 //     createDeck,
@@ -47,7 +54,18 @@ const queryKeys = {
     // Add other top-level keys (e.g., user) as needed
     reviews: {
         historyForDeck: (deckId: string) => ['reviews', deckId, 'history'] as const,
+        latestForCard: (cardId: string) => ['reviews', 'latest', cardId] as const,
     },
+    // Add key for review cards
+    reviewSession: {
+        all: ['reviewSession'] as const,
+        byDeck: (deckId: string) => [...queryKeys.reviewSession.all, 'deck', deckId] as const,
+        global: () => [...queryKeys.reviewSession.all, 'global'] as const,
+    },
+    // Add key for single card
+    card: {
+        detail: (cardId: string) => ['card', cardId] as const,
+    }
 };
 
 export const reviewKeys = {
@@ -136,6 +154,31 @@ export const useDeckReviewHistory = (deckId: string | undefined) => {
         },
         enabled: !!deckId,
         staleTime: 1 * 60 * 1000, // Cache history for 1 minute
+    });
+};
+
+/**
+ * Hook to fetch the latest review event for a specific card.
+ */
+export const useLatestReviewForCard = (cardId: string | undefined) => {
+    // Use shared ReviewEvent type after mapping
+    return useQuery<ReviewEvent | null, Error>({
+        queryKey: queryKeys.reviews.latestForCard(cardId || 'unknown'),
+        queryFn: async () => {
+            if (!cardId) {
+                return null; // Or reject? Return null if no cardId means no fetch
+            }
+            // Action now returns the already mapped ReviewEvent | null
+            const result = await getLatestReviewForCardAction(cardId);
+            if (!result.success) {
+                throw new Error(result.message || 'Failed to fetch latest review');
+            }
+            // result.reviewEvent is already ReviewEvent | null
+            return result.reviewEvent ?? null;
+        },
+        enabled: !!cardId, // Only run if cardId is provided
+        staleTime: 1 * 60 * 1000, // Cache for 1 minute
+        gcTime: 5 * 60 * 1000,
     });
 };
 
@@ -271,10 +314,10 @@ export const useUpdateCardMutation = () => {
             return result.card;
         },
         onSuccess: (data, variables) => {
+            // Invalidate fetches for the deck the card belonged to
             queryClient.invalidateQueries({ queryKey: queryKeys.cards.forDeck(variables.deckId) });
-            queryClient.setQueryData(queryKeys.cards.forDeck(variables.deckId), (old: Card[] | undefined) =>
-                old?.map(card => card.id === variables.cardId ? data : card) || []
-            );
+            // Update the specific card query if it exists
+            queryClient.setQueryData(queryKeys.card.detail(variables.cardId), data);
         },
     });
 };
@@ -386,6 +429,70 @@ export const useLastReviewResults = (deckId: string | undefined, options?: Parti
         enabled: !!deckId, // Only run the query if deckId is available
         staleTime: 1000 * 60 * 5, // Cache for 5 minutes
         ...options,
+    });
+};
+
+/**
+ * Hook to fetch a single card by ID using Server Action.
+ * Requires auth token.
+ */
+export const useCard = (cardId: string | undefined, token: string | undefined) => {
+    return useQuery<Card, Error>({
+        queryKey: queryKeys.card.detail(cardId || 'unknown'),
+        queryFn: async () => {
+            if (!cardId) {
+                return Promise.reject(new Error('Card ID is required'));
+            }
+            const result = await getCardAction(cardId, token);
+            if (!result.success || !result.card) {
+                throw new Error(result.message || 'Failed to fetch card');
+            }
+            return result.card;
+        },
+        enabled: !!cardId && !!token,
+        staleTime: 5 * 60 * 1000,
+    });
+};
+
+/**
+ * Hook to fetch cards for a review session (global or single deck) using Server Action.
+ * Requires auth token.
+ */
+interface UseCardsForReviewOptions {
+    deckId?: string;
+    limit: number;
+    strategy: 'random' | 'missedFirst';
+    token: string | undefined;
+    enabled?: boolean;
+}
+
+export const useCardsForReview = ({
+    deckId,
+    limit,
+    strategy,
+    token,
+    enabled = true,
+}: UseCardsForReviewOptions) => {
+    // Generate a dynamic query key based on parameters
+    const queryKey = deckId
+        ? [...queryKeys.reviewSession.byDeck(deckId), { limit, strategy }]
+        : [...queryKeys.reviewSession.global(), { limit, strategy }];
+
+    return useQuery<Card[], Error>({
+        queryKey,
+        queryFn: async () => {
+            if (!token) {
+                return Promise.reject(new Error('Authentication token is required'));
+            }
+            const result = await getCardsForReviewAction({ token, deckId, limit, strategy });
+            if (!result.success || !result.cards) {
+                throw new Error(result.message || 'Failed to fetch cards for review');
+            }
+            return result.cards;
+        },
+        enabled: !!token && enabled,
+        staleTime: 0, // Don't cache review sessions aggressively
+        gcTime: 5 * 60 * 1000, // Keep in cache for 5 mins
     });
 };
 

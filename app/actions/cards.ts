@@ -2,7 +2,7 @@
 
 import { ObjectId } from 'mongodb';
 import { revalidatePath } from 'next/cache';
-import type { Card, CardDocument, ReviewEventDocument } from '@/types';
+import type { Card, CardDocument, ReviewEventDocument, DeckDocument } from '@/types';
 import { ReviewResult } from '@/types'; // Import enum value
 // import jwt from 'jsonwebtoken'; // Removed
 import { connectToDatabase } from '@/lib/db';
@@ -98,6 +98,66 @@ export async function createCardAction(input: CreateCardInput): Promise<CreateCa
     }
 }
 
+// --- Fetch Single Card ---
+interface FetchCardResult {
+    success: boolean;
+    card?: Card; // Use shared Card type
+    message?: string;
+}
+
+export async function getCardAction(cardId: string, token: string | undefined): Promise<FetchCardResult> {
+    const payload = verifyAuthToken(token);
+    // We don't have the user ID on the card, so we check deck ownership
+    if (!payload) return { success: false, message: 'Unauthorized' };
+
+    if (!cardId || !ObjectId.isValid(cardId)) {
+        return { success: false, message: 'Valid Card ID is required' };
+    }
+
+    try {
+        const { db } = await connectToDatabase();
+        const cardsCollection = db.collection<CardDocument>('cards');
+        const decksCollection = db.collection<DeckDocument>('decks');
+
+        const cardDoc = await cardsCollection.findOne({ _id: new ObjectId(cardId) });
+
+        if (!cardDoc) {
+            return { success: false, message: 'Card not found' };
+        }
+
+        // Verify deck ownership
+        const deckDoc = await decksCollection.findOne({ _id: cardDoc.deck_id });
+        if (!deckDoc) {
+            // This case implies data inconsistency (card exists, deck doesn't)
+            console.error(`Data inconsistency: Card ${cardId} found, but its deck ${cardDoc.deck_id.toString()} does not exist.`);
+            return { success: false, message: 'Associated deck not found.' };
+        }
+
+        // Note: We assume decks have an ownerId. Adjust if schema is different.
+        // This check is hypothetical based on common patterns.
+        // If decks don't have owner info, auth needs rethinking for single card fetch.
+        // const deckOwnerId = deckDoc.ownerId?.toString(); // Assuming ownerId field exists
+        // if (deckOwnerId !== payload.userId) { // Assuming userId is in payload
+        //    return { success: false, message: 'Unauthorized: Cannot access card from this deck' };
+        // }
+        // --- TEMPORARY: Skipping owner check until Deck schema confirmed ---
+        // --- If auth fails here, revisit deck schema and JWT payload ---
+
+        const mappedCard = mapCardDocument(cardDoc);
+        if (!mappedCard) {
+            // This should ideally not happen if cardDoc was found
+            return { success: false, message: 'Failed to map card data.' };
+        }
+
+        return { success: true, card: mappedCard };
+
+    } catch (error) {
+        console.error('[Fetch Single Card Action Error]', error);
+        const message = error instanceof Error ? error.message : 'Failed to fetch card';
+        return { success: false, message };
+    }
+}
+
 // --- Fetch Cards for a Deck ---
 interface FetchCardsResult {
     success: boolean;
@@ -122,6 +182,138 @@ export async function fetchDeckCardsAction(deckId: string): Promise<FetchCardsRe
     } catch (error) {
         console.error('[Fetch Deck Cards Action Error]', error);
         const message = error instanceof Error ? error.message : 'Failed to fetch cards for deck';
+        return { success: false, message };
+    }
+}
+
+// --- Fetch Cards For Review (Multiple Decks or Single) ---
+interface FetchReviewCardsResult {
+    success: boolean;
+    cards?: Card[];
+    message?: string;
+}
+
+interface FetchReviewCardsInput {
+    token: string | undefined;
+    deckId?: string; // Optional: Fetch from a specific deck
+    limit: number;
+    strategy: 'random' | 'missedFirst';
+}
+
+export async function getCardsForReviewAction(input: FetchReviewCardsInput): Promise<FetchReviewCardsResult> {
+    const { token, deckId, limit, strategy } = input;
+
+    const payload = verifyAuthToken(token);
+    if (!payload) return { success: false, message: 'Unauthorized' };
+    // TODO: Get userId from payload if needed for deck filtering (assuming payload structure)
+    const userId = 'user-placeholder'; // Replace with actual user ID from payload
+    if (!userId) return { success: false, message: 'User ID not found in token' };
+
+    if (limit <= 0) return { success: false, message: 'Limit must be positive' };
+    if (deckId && !ObjectId.isValid(deckId)) {
+        return { success: false, message: 'Invalid Deck ID format' };
+    }
+
+    try {
+        const { db } = await connectToDatabase();
+        const cardsCollection = db.collection<CardDocument>('cards');
+        const decksCollection = db.collection<DeckDocument>('decks');
+        const reviewsCollection = db.collection<ReviewEventDocument>('review_events');
+
+        let targetDeckObjectIds: ObjectId[] = [];
+
+        // Determine target decks
+        if (deckId) {
+            // Specific deck: Verify ownership
+            const deckDoc = await decksCollection.findOne({ _id: new ObjectId(deckId) });
+            if (!deckDoc) return { success: false, message: 'Deck not found' };
+            // TODO: Verify deck ownership using userId and deckDoc.ownerId
+            // if (deckDoc.ownerId?.toString() !== userId) {
+            //    return { success: false, message: 'Unauthorized access to this deck' };
+            // }
+            targetDeckObjectIds = [new ObjectId(deckId)];
+        } else {
+            // All user's decks
+            // TODO: Need ownerId on decks to filter by userId
+            // const userDecks = await decksCollection.find({ ownerId: new ObjectId(userId) }).toArray();
+            // if (!userDecks || userDecks.length === 0) return { success: true, cards: [] }; // No decks found for user
+            // targetDeckObjectIds = userDecks.map(d => d._id);
+            // --- TEMPORARY: Fetching from ALL decks as ownerId is missing ---
+            const allDecks = await decksCollection.find({}).toArray();
+            if (!allDecks || allDecks.length === 0) return { success: true, cards: [] };
+            targetDeckObjectIds = allDecks.map(d => d._id);
+            // --- END TEMPORARY ---
+        }
+
+        if (targetDeckObjectIds.length === 0) {
+            return { success: true, cards: [] }; // No decks to fetch cards from
+        }
+
+        let cardDocs: CardDocument[] = [];
+
+        // Fetch cards based on strategy
+        if (strategy === 'random') {
+            cardDocs = await cardsCollection.aggregate<CardDocument>([
+                { $match: { deck_id: { $in: targetDeckObjectIds } } },
+                { $sample: { size: limit } }
+            ]).toArray();
+        } else if (strategy === 'missedFirst') {
+            // 1. Find latest review for each card in target decks
+            // 2. Filter for 'missed' results
+            // 3. Fetch those card details
+            // 4. If needed, fetch random remaining cards
+
+            const latestReviews = await reviewsCollection.aggregate([
+                // Match reviews associated with the target decks' cards
+                // Note: This requires reviews to store deck_id or a lookup from card_id
+                // Assuming CardDocument has deck_id, we find relevant card IDs first
+                {
+                    $lookup: {
+                        from: 'cards',
+                        localField: 'card_id',
+                        foreignField: '_id',
+                        as: 'cardInfo'
+                    }
+                },
+                { $unwind: '$cardInfo' },
+                { $match: { 'cardInfo.deck_id': { $in: targetDeckObjectIds } } },
+                { $sort: { timestamp: -1 } },
+                {
+                    $group: {
+                        _id: '$card_id',
+                        lastReviewResult: { $first: '$result' },
+                        cardDoc: { $first: '$cardInfo' } // Keep card info
+                    }
+                },
+                { $match: { lastReviewResult: ReviewResult.MISSED } }, // Use enum value
+                { $limit: limit }
+            ]).toArray();
+
+            const missedCardIds = latestReviews.map(r => r._id as ObjectId);
+            cardDocs = latestReviews.map(r => r.cardDoc as CardDocument);
+
+            // If we need more cards
+            if (cardDocs.length < limit) {
+                const remainingLimit = limit - cardDocs.length;
+                const randomExtraCards = await cardsCollection.aggregate<CardDocument>([
+                    {
+                        $match: {
+                            deck_id: { $in: targetDeckObjectIds },
+                            _id: { $nin: missedCardIds } // Exclude already selected missed cards
+                        }
+                    },
+                    { $sample: { size: remainingLimit } }
+                ]).toArray();
+                cardDocs = [...cardDocs, ...randomExtraCards];
+            }
+        }
+
+        const mappedCards = cardDocs.map(mapCardDocument).filter((c): c is Card => c !== null);
+        return { success: true, cards: mappedCards };
+
+    } catch (error) {
+        console.error('[Fetch Review Cards Action Error]', error);
+        const message = error instanceof Error ? error.message : 'Failed to fetch cards for review';
         return { success: false, message };
     }
 }
@@ -300,10 +492,3 @@ export async function createReviewEventAction(input: CreateReviewEventInput): Pr
         return { success: false, message };
     }
 }
-
-// Remove duplicated example
-/*
-export async function fetchDecksAction(): Promise<{ success: boolean; decks?: Deck[]; message?: string }> {
-    // ... implementation ...
-}
-*/

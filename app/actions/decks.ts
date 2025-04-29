@@ -1,20 +1,12 @@
 'use server';
 
 import { ObjectId } from 'mongodb'; // Removed MongoClient
-// import jwt from 'jsonwebtoken'; // Removed
 import { revalidatePath } from 'next/cache';
-// Import shared types
-// Remove unused JwtPayload import
 import type { Deck, DeckDocument, CardDocument } from '@/types';
 import { connectToDatabase } from '@/lib/db';
 import { verifyAuthToken } from '@/lib/auth'; // Import shared auth function
 import { mapMongoId } from '@/lib/utils'; // Import shared helper
 
-// --- Remove Authentication Helper ---
-// function verifyAuthToken(token: string | undefined): JwtPayload | null { ... } // Removed
-
-// --- Remove Generic Helper ---
-// function mapMongoId<T extends { _id?: ObjectId }>(...) { ... } // Removed
 
 // --- Keep Specific Helper ---
 function mapDeckDocument(doc: DeckDocument | null | undefined): Deck | null {
@@ -24,7 +16,7 @@ function mapDeckDocument(doc: DeckDocument | null | undefined): Deck | null {
     return mapped as Deck; // Cast result to Deck (assuming Deck only needs id mapping)
 }
 
-// --- Deck CRUD Actions (MongoDB Version) ---
+// --- Deck CRUD Actions ---
 
 export async function fetchDecksAction(): Promise<{ success: boolean; decks?: Deck[]; message?: string }> {
     try {

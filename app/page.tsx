@@ -1,17 +1,16 @@
 'use client'; // Mark as client component
 
 import React, { useState } from 'react';
-import Link from 'next/link'; // Use Next.js Link
-import { z } from 'zod'; // Import Zod
+import Link from 'next/link';
+import { z } from 'zod';
 import {
-    useDecks, // Use the hook again
+    useDecks,
     useCreateDeckMutation,
     useDeleteDeckMutation,
-    useImportDeckMutation, // Import the new hook
-} from '@/hooks/queryHooks'; // Use path alias
-import Button from '@/components/Button'; // Use path alias
-import { useAuth } from './context/useAuth';
-// Import shared type
+    useImportDeckMutation,
+} from '@/hooks/queryHooks';
+import Button from '@/components/Button';
+import { useAuth } from '@/context/useAuth';
 import type { Deck } from '@/types';
 
 // Zod schema for validating the JSON (an array of card objects)
@@ -225,6 +224,12 @@ export default function HomePage() {
                     <Button variant="secondary" onClick={() => setIsImportModalOpen(true)} disabled={isLoading}>
                         Import Deck from JSON
                     </Button>
+                    {/* Button to navigate to global play page */}
+                    <Link href="/play?strategy=random&limit=100" passHref legacyBehavior>
+                        <Button as="a" variant="secondary" disabled={isLoading}>
+                            Review All Decks (Random)
+                        </Button>
+                    </Link>
                 </div>
             )}
 
