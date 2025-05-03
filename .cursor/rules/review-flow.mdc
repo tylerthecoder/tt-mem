@@ -1,0 +1,40 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Review Flow
+
+The application supports reviewing flashcards either within a specific deck or across all decks.
+
+## Global Review (`/play`)
+
+- **Entry Point:** [app/play/page.tsx](mdc:app/play/page.tsx)
+- **Functionality:** Allows users to review a set of cards fetched from all their decks based on selected strategies.
+- **Strategies:**
+    - `random`: Fetches a random subset of cards (default limit 100).
+    - `missedFirst`: Prioritizes cards previously marked as "Missed".
+- **Data Fetching:** Uses the `useCardsForReview` hook ([app/hooks/queryHooks.ts](mdc:app/hooks/queryHooks.ts)), which calls the `getCardsForReviewAction` server action ([app/actions/cards.ts](mdc:app/actions/cards.ts)).
+- **UI:** Leverages the [app/components/CardReviewer.tsx](mdc:app/components/CardReviewer.tsx) component to display and interact with the current card.
+- **Params:** Reads `strategy`, `limit`, and `flipped` from URL search parameters using `useSearchParams` (handled within a `<Suspense>` boundary).
+
+## Single Deck Review (`/deck/[deckId]/play`)
+
+- **Entry Point:** [app/deck/[deckId]/play/page.tsx](mdc:app/deck/[deckId]/play/page.tsx)
+- **Functionality:** Reviews all cards within a specific deck. Supports randomization (`randomize=true` param) and flipping cards (`flipped=true` param).
+- **Data Fetching:** Uses `useDeckCards` ([app/hooks/queryHooks.ts](mdc:app/hooks/queryHooks.ts)) to fetch all cards for the deck via `fetchDeckCardsAction` ([app/actions/cards.ts](mdc:app/actions/cards.ts)). Card sequence management (shuffling, indexing) is handled within the page component.
+- **UI:** Also uses the [app/components/CardReviewer.tsx](mdc:app/components/CardReviewer.tsx) component.
+
+## Core Review Component (`CardReviewer`)
+
+- **Location:** [app/components/CardReviewer.tsx](mdc:app/components/CardReviewer.tsx)
+- **Responsibilities:**
+    - Displays the front/back text of a single card (`Card` prop).
+    - Handles showing/hiding the target text.
+    - Renders review result buttons (Easy, Medium, Hard, Missed) and calls the `onReview` prop function.
+    - Links to the card edit page: [app/card/[cardId]/edit/page.tsx](mdc:app/card/[cardId]/edit/page.tsx).
+    - Displays the last review history using [app/components/CardReviewHistorySnippet.tsx](mdc:app/components/CardReviewHistorySnippet.tsx).
+
+## Recording Reviews
+
+- Both play pages use the `useCreateReviewEventMutation` hook ([app/hooks/queryHooks.ts](mdc:app/hooks/queryHooks.ts)), which calls the `createReviewEventAction` server action ([app/actions/cards.ts](mdc:app/actions/cards.ts)) to record the result (Easy, Medium, Hard, Missed).

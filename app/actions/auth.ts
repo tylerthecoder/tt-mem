@@ -33,7 +33,7 @@ export async function loginUserAction(password: string): Promise<LoginResult> {
             const token = jwt.sign(
                 { user: 'admin' }, // Simple payload
                 jwtSecret,
-                { expiresIn: '1h' }
+                { expiresIn: '1d' }
             );
             return { success: true, token };
         } else {

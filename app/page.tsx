@@ -219,16 +219,14 @@ export default function HomePage() {
 
             {/* Action Buttons Group */}
             {token && (
-                <div className="flex flex-wrap gap-2">
-                    {/* Button to open import modal */}
+                <div className="flex flex-wrap gap-3 items-center">
+                    {/* Import Button */}
                     <Button variant="secondary" onClick={() => setIsImportModalOpen(true)} disabled={isLoading}>
                         Import Deck from JSON
                     </Button>
-                    {/* Button to navigate to global play page */}
-                    <Link href="/play?strategy=random&limit=100" passHref legacyBehavior>
-                        <Button as="a" variant="secondary" disabled={isLoading}>
-                            Review All Decks (Random)
-                        </Button>
+                    {/* AI Quiz Button */}
+                    <Link href="/quiz" passHref legacyBehavior>
+                        <Button as="a" variant="secondary" disabled={isLoading}>AI Quiz Generator</Button>
                     </Link>
                 </div>
             )}

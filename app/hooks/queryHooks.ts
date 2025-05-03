@@ -32,6 +32,12 @@ import {
     getLatestReviewForCardAction
 } from '@/actions/reviewEvents'; // Import the new actions
 import type { ReviewEvent } from '@/types'; // Import ReviewEvent type
+// Import Quiz types and actions
+import {
+    generateQuizSetAction,
+    scoreQuizAnswerAction
+} from '@/actions/quiz';
+import type { QuizSet, QuestionAnswerPair } from '@/types';
 
 // Remove unused client functions
 // import {
@@ -493,6 +499,73 @@ export const useCardsForReview = ({
         enabled: !!token && enabled,
         staleTime: 0, // Don't cache review sessions aggressively
         gcTime: 5 * 60 * 1000, // Keep in cache for 5 mins
+    });
+};
+
+// --- Quiz Hooks ---
+
+// Mutation hook for generating a new quiz set
+export const useGenerateQuizMutation = () => {
+    const queryClient = useQueryClient(); // Needed if we want to invalidate/cache quiz sets
+
+    return useMutation<
+        QuizSet, // Returns the generated QuizSet object
+        Error,
+        { topic: string } // Takes the topic string
+    >({
+        mutationFn: async ({ topic }) => {
+            const result = await generateQuizSetAction(topic);
+            if (!result.success || !result.quizSet) {
+                throw new Error(result.message || 'Failed to generate quiz set.');
+            }
+            return result.quizSet;
+        },
+        // Optional: Invalidate or cache quiz data if needed
+        // onSuccess: (data) => {
+        //     // Maybe cache this quiz set?
+        //     // queryClient.setQueryData(['quizSet', data.id], data);
+        // },
+        onError: (error) => {
+            console.error("Generate Quiz Mutation Error:", error);
+            // Error will be available on the mutation hook's state
+        },
+    });
+};
+
+// Type for the result of the scoring action
+interface ScoreResult {
+    is_correct: boolean;
+    llm_rationale?: string;
+}
+
+// Type for the scoring mutation variables
+interface ScoreQuizVariables {
+    quizSetId: string;
+    questionIndex: number;
+    userAnswer: string;
+}
+
+// Mutation hook for scoring a single quiz answer
+export const useScoreQuizAnswerMutation = () => {
+    // const queryClient = useQueryClient(); // Needed if invalidating attempts data
+
+    return useMutation<
+        ScoreResult,        // Returns the scoring result
+        Error,
+        ScoreQuizVariables  // Takes quizSetId, index, and answer
+    >({
+        mutationFn: async ({ quizSetId, questionIndex, userAnswer }) => {
+            const result = await scoreQuizAnswerAction(quizSetId, questionIndex, userAnswer);
+            if (!result.success || typeof result.is_correct === 'undefined') {
+                throw new Error(result.message || 'Failed to score quiz answer.');
+            }
+            // Return only the core result data
+            return { is_correct: result.is_correct, llm_rationale: result.llm_rationale };
+        },
+        onError: (error) => {
+            console.error("Score Quiz Answer Mutation Error:", error);
+        },
+        // No specific onSuccess needed unless updating UI based on attempts cache
     });
 };
 
