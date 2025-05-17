@@ -21,6 +21,7 @@ export interface QuizResult {
     userAnswer: string;
     isCorrect: boolean;
     rationale?: string;
+    extra_context?: string; // Add extra context to result
 }
 
 export default function QuizPlayer({ quizSetId, topic, questions, onQuizComplete }: QuizPlayerProps) {
@@ -56,6 +57,7 @@ export default function QuizPlayer({ quizSetId, topic, questions, onQuizComplete
                         userAnswer: currentAnswer.trim(),
                         isCorrect: data.is_correct,
                         rationale: data.llm_rationale,
+                        extra_context: currentQuestion.extra_context, // Store extra context
                     };
                     setResults(prev => [...prev, result]);
                     setLastScoreResult({ is_correct: data.is_correct, rationale: data.llm_rationale });
@@ -125,11 +127,17 @@ export default function QuizPlayer({ quizSetId, topic, questions, onQuizComplete
                     <h3 className={`text-lg font-semibold ${lastScoreResult.is_correct ? 'text-green-700' : 'text-red-700'}`}>
                         {lastScoreResult.is_correct ? 'Correct!' : 'Incorrect'}
                     </h3>
-                    {!lastScoreResult.is_correct && (
-                        <p className="text-sm text-gray-700 mt-2">Correct Answer: <span className="font-medium">{currentQuestion.answer_text}</span></p>
+                    <p className="text-sm text-gray-700 mt-2">Correct Answer: <span className="font-medium">{currentQuestion.answer_text}</span></p>
+                    {/* Always show extra context if available */}
+                    {currentQuestion.extra_context && (
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                            <p className="text-xs text-gray-600 font-semibold">Explanation:</p>
+                            <p className="text-xs text-gray-600">{currentQuestion.extra_context}</p>
+                        </div>
                     )}
-                    {lastScoreResult.rationale && (
-                        <p className="text-xs text-gray-600 mt-2 italic">AI Rationale: {lastScoreResult.rationale}</p>
+                    {/* Show rationale only if incorrect */}
+                    {!lastScoreResult.is_correct && lastScoreResult.rationale && (
+                        <p className="text-xs text-gray-500 mt-2 italic">AI Rationale for scoring: {lastScoreResult.rationale}</p>
                     )}
                     <div className="mt-4 flex justify-end">
                         <Button onClick={handleNextQuestion} variant="primary">

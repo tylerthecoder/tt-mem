@@ -17,6 +17,7 @@ import type {
 const QuestionAnswerPairSchema = z.object({
     question_text: z.string().trim().min(1, 'Question text cannot be empty'),
     answer_text: z.string().trim().min(1, 'Answer text cannot be empty'),
+    extra_context: z.string().optional(),
 });
 
 const QuizSetGenerationResponseSchema = z.object({
@@ -58,11 +59,12 @@ export async function generateQuizSetAction(topic: string): Promise<GenerateQuiz
 Guidelines:
 - The questions should be technical and precise.
 - The answers should not be open-ended, they should be specific and concise.
+- For each pair, include an "extra_context" field containing a brief (1-2 sentence) explanation or elaboration of the answer.
 - The questions should be suitable for a quiz format.
 
 
 Output Format:
-Provide the output as a JSON array of objects, where each object has keys "question_text" and "answer_text". Example format: {"quiz": [{"question_text": "Q1", "answer_text": "A1"}, ...]}
+Provide the output as a JSON object with a single key "quiz" containing an array of objects. Each object must have keys "question_text", "answer_text", and "extra_context". Example format: {"quiz": [{"question_text": "Q1", "answer_text": "A1", "extra_context": "Explanation for A1..."}, ...]}
 `;
 
         const completion = await openai.chat.completions.create({
@@ -167,6 +169,10 @@ export async function scoreQuizAnswerAction(
 
 Reference Answer: "${correctAnswer}"
 User's Answer: "${userAnswer}"
+
+Guidelines:
+- The user's answer should be semantically correct compared to the reference answer.
+- Spelling and grammar are not important, the meaning is what matters. (unless they spelled something completely different, i.e. "monet" is not correct for "manat")
 
 Is the user's answer correct? Respond ONLY with a JSON object containing a boolean field "is_correct" and an optional string field "rationale" explaining your decision briefly. Example: {"is_correct": true, "rationale": "The user provided the main point."} or {"is_correct": false, "rationale": "The user missed the key aspect mentioned in the reference."}`;
 

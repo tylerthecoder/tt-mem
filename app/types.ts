@@ -12,7 +12,7 @@ export interface Deck {
 
 export interface Card {
     id: string;
-    deck_id: string; // Ensure this is consistently set/required
+    deck_id: string;
     front_text: string;
     back_text: string;
     createdAt?: Date;
@@ -86,6 +86,7 @@ export interface ReviewHistoryEntry {
 export interface QuestionAnswerPair {
     question_text: string;
     answer_text: string;
+    extra_context?: string;
 }
 
 // Represents the structure stored in the 'quiz_sets' MongoDB collection
