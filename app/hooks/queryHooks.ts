@@ -24,6 +24,7 @@ import {
     createReviewEventAction, // Import the action
     getCardAction, // Import the new action
     getCardsForReviewAction, // Import the new action
+    getMissedCardsForDeckInTimeframeAction // Added this import
 } from '@/actions/cards';
 // Import Server Actions for reviews
 import { fetchDeckReviewHistoryAction } from '@/actions/reviews'; // Import the new action
@@ -68,6 +69,7 @@ const queryKeys = {
     // Add cards query key
     cards: {
         forDeck: (deckId: string) => ['cards', deckId] as const,
+        missedInTimeframe: (deckId: string, timeframeDays: number) => ['cards', deckId, 'missed', timeframeDays] as const, // Added new key
     },
     // Add other top-level keys (e.g., user) as needed
     reviews: {
@@ -712,4 +714,39 @@ export function useCreateDeckWithAICardsMutation() {
         },
     });
 }
+
+// --- New Hook for Missed Cards ---
+interface UseMissedCardsForDeckInTimeframeParams {
+    deckId: string | undefined;
+    timeframeDays: number | undefined;
+    token: string | undefined;
+    enabled?: boolean;
+}
+
+export const useMissedCardsForDeckInTimeframe = ({
+    deckId,
+    timeframeDays,
+    token,
+    enabled = true,
+}: UseMissedCardsForDeckInTimeframeParams) => {
+    return useQuery<Card[], Error>({
+        queryKey: queryKeys.cards.missedInTimeframe(deckId || 'unknown', timeframeDays || 0),
+        queryFn: async () => {
+            if (!deckId || typeof timeframeDays !== 'number' || timeframeDays <= 0) {
+                return Promise.reject(new Error('Deck ID and valid timeframe (days) are required'));
+            }
+            if (!token) {
+                return Promise.reject(new Error('Authentication token is required'));
+            }
+            const result = await getMissedCardsForDeckInTimeframeAction({ token, deckId, timeframeDays });
+            if (!result.success || !result.cards) {
+                throw new Error(result.message || 'Failed to fetch missed cards');
+            }
+            return result.cards;
+        },
+        enabled: !!deckId && !!token && typeof timeframeDays === 'number' && timeframeDays > 0 && enabled,
+        staleTime: 0, // Data is likely to change based on new reviews
+        gcTime: 5 * 60 * 1000,
+    });
+};
 

@@ -434,7 +434,6 @@ export async function createReviewEventAction(input: CreateReviewEventInput): Pr
 
         const newReviewEventData: Omit<ReviewEventDocument, '_id'> = {
             card_id: new ObjectId(cardId),
-            // deck_id: new ObjectId(deckId), // Optionally store deck_id too
             result: result,
             timestamp: new Date(), // Use server timestamp
         };
@@ -453,6 +452,87 @@ export async function createReviewEventAction(input: CreateReviewEventInput): Pr
     } catch (error) {
         console.error('[Create Review Event Action Error]', error);
         const message = error instanceof Error ? error.message : 'Failed to record review event';
+        return { success: false, message };
+    }
+}
+
+// --- Fetch Missed Cards in Timeframe for a Deck ---
+interface FetchMissedCardsResult {
+    success: boolean;
+    cards?: Card[];
+    message?: string;
+}
+
+interface GetMissedCardsInTimeframeParams {
+    token: string | undefined;
+    deckId: string;
+    timeframeDays: number;
+}
+
+export async function getMissedCardsForDeckInTimeframeAction({
+    token,
+    deckId,
+    timeframeDays
+}: GetMissedCardsInTimeframeParams): Promise<FetchMissedCardsResult> {
+    const user = verifyAuthToken(token);
+    if (!user) {
+        return { success: false, message: 'Unauthorized' };
+    }
+
+    if (!deckId || !ObjectId.isValid(deckId)) {
+        return { success: false, message: 'Valid Deck ID is required' };
+    }
+
+    if (typeof timeframeDays !== 'number' || timeframeDays <= 0) {
+        return { success: false, message: 'Valid timeframe (in days) is required' };
+    }
+
+    try {
+        const { db } = await connectToDatabase();
+        const cardsCollection = db.collection<CardDocument>('cards');
+        const reviewEventsCollection = db.collection<ReviewEventDocument>('review_events');
+
+        // 1. Fetch all card IDs for the given deckId
+        const cardsInDeck = await cardsCollection.find(
+            { deck_id: new ObjectId(deckId) },
+            { projection: { _id: 1 } } // Only fetch the _id
+        ).toArray();
+
+        if (cardsInDeck.length === 0) {
+            return { success: true, cards: [] }; // No cards in this deck
+        }
+        const cardIdsFromDeck = cardsInDeck.map(card => card._id); // These are ObjectIds
+
+        const targetDate = new Date();
+        targetDate.setDate(targetDate.getDate() - timeframeDays);
+
+        // 2. Find recent missed review events using the card_ids
+        const missedReviewEvents = await reviewEventsCollection.find({
+            card_id: { $in: cardIdsFromDeck }, // Use card_ids from the deck
+            result: ReviewResult.MISSED,
+            timestamp: { $gte: targetDate }
+        }).project({ card_id: 1 }).toArray(); // Only need card_id to find unique cards
+
+        if (missedReviewEvents.length === 0) {
+            return { success: true, cards: [] }; // No missed cards in timeframe for this deck's cards
+        }
+
+        // Get unique ObjectIds of missed cards
+        const uniqueMissedCardObjectIds = Array.from(new Set(missedReviewEvents.map(event => event.card_id.toString())))
+            .map(idStr => new ObjectId(idStr));
+
+        // 3. Fetch the actual card details for these unique missed card IDs
+        const cardDocs = await cardsCollection.find({
+            _id: { $in: uniqueMissedCardObjectIds } // Query by the set of ObjectIds
+        }).toArray();
+
+        const mappedCards = cardDocs.map(mapCardDocument).filter((c): c is Card => c !== null);
+
+        return { success: true, cards: mappedCards };
+
+    } catch (error) {
+        console.error('[Fetch Missed Cards Action Error]', error);
+        const message = error instanceof Error ? error.message : 'Failed to fetch missed cards';
         return { success: false, message };
     }
 }

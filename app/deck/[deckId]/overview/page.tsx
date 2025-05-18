@@ -38,6 +38,8 @@ export default function DeckOverviewPage() {
     const { token } = useAuth();
 
     const [flipCards, setFlipCards] = useState(false);
+    const [playStrategy, setPlayStrategy] = useState<'all' | 'missedInTimeframe'>('all');
+    const [timeframeDays, setTimeframeDays] = useState<number>(7);
 
     const [isAIPromptModalOpen, setIsAIPromptModalOpen] = useState(false);
     const [aiEditSuggestions, setAiEditSuggestions] = useState<AICardEditSuggestion[]>([]);
@@ -70,6 +72,16 @@ export default function DeckOverviewPage() {
     const handleStartPlaying = () => {
         const queryParams = new URLSearchParams();
         if (flipCards) queryParams.set('flipped', 'true');
+
+        queryParams.set('strategy', playStrategy);
+        if (playStrategy === 'missedInTimeframe') {
+            if (timeframeDays > 0) {
+                queryParams.set('timeframe', timeframeDays.toString());
+            } else {
+                alert('Please enter a valid number of days for the timeframe.');
+                return;
+            }
+        }
         const queryString = queryParams.toString();
         const playUrl = `/deck/${deckId}/play${queryString ? `?${queryString}` : ''}`;
         router.push(playUrl);
@@ -249,19 +261,59 @@ export default function DeckOverviewPage() {
 
             <div className="bg-white p-4 sm:p-6 rounded-lg shadow space-y-4">
                 <h2 className="text-xl font-semibold text-gray-800">Play Options</h2>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-6 space-y-3 sm:space-y-0">
-                    <div className="flex items-center space-x-3">
-                        <input
-                            type="checkbox"
-                            id="flip-cards-checkbox"
-                            checked={flipCards}
-                            onChange={(e) => setFlipCards(e.target.checked)}
-                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary focus:ring-offset-1"
-                        />
-                        <label htmlFor="flip-cards-checkbox" className="text-sm font-medium text-gray-700 select-none">
-                            Flip Cards (Show Back First)
-                        </label>
+                <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Strategy:</label>
+                    <div className="flex flex-col sm:flex-row gap-y-2 gap-x-4">
+                        <div className="flex items-center">
+                            <input
+                                type="radio"
+                                id="strategy-all"
+                                name="playStrategy"
+                                value="all"
+                                checked={playStrategy === 'all'}
+                                onChange={() => setPlayStrategy('all')}
+                                className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
+                            />
+                            <label htmlFor="strategy-all" className="ml-2 block text-sm text-gray-900">Play All Cards</label>
+                        </div>
+                        <div className="flex items-center">
+                            <input
+                                type="radio"
+                                id="strategy-missed"
+                                name="playStrategy"
+                                value="missedInTimeframe"
+                                checked={playStrategy === 'missedInTimeframe'}
+                                onChange={() => setPlayStrategy('missedInTimeframe')}
+                                className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
+                            />
+                            <label htmlFor="strategy-missed" className="ml-2 block text-sm text-gray-900">Play Missed Cards</label>
+                        </div>
                     </div>
+                </div>
+                {playStrategy === 'missedInTimeframe' && (
+                    <div className="space-y-1 pt-2">
+                        <label htmlFor="timeframe-days" className="block text-sm font-medium text-gray-700">Within the last (days):</label>
+                        <input
+                            type="number"
+                            id="timeframe-days"
+                            value={timeframeDays}
+                            onChange={(e) => setTimeframeDays(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                            min="1"
+                            className="mt-1 block w-full sm:w-1/3 rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm p-2"
+                        />
+                    </div>
+                )}
+                <div className="flex items-center space-x-3 pt-3">
+                    <input
+                        type="checkbox"
+                        id="flip-cards-checkbox"
+                        checked={flipCards}
+                        onChange={(e) => setFlipCards(e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary focus:ring-offset-1"
+                    />
+                    <label htmlFor="flip-cards-checkbox" className="text-sm font-medium text-gray-700 select-none">
+                        Flip Cards (Show Back First)
+                    </label>
                 </div>
                 <div className="pt-2">
                     <Button
@@ -279,15 +331,12 @@ export default function DeckOverviewPage() {
                     <h2 className="text-xl font-semibold text-gray-800">Cards in Deck ({cards ? cards.length : 0})</h2>
                 </div>
 
-                {(() => {
-                    if (cardsLoading && (!cards || cards.length === 0)) {
-                        return <div className="text-center text-gray-500 py-4">Loading cards...</div>;
-                    }
-                    if (!cardsLoading && (!cards || cards.length === 0)) {
-                        return <div className="text-center text-gray-500 py-4">No cards in this deck.</div>;
-                    }
-                    return null;
-                })()}
+                {cardsLoading && (typeof cards === 'undefined' || cards.length === 0) && (
+                    <div className="text-center text-gray-500 py-4">Loading cards...</div>
+                )}
+                {!cardsLoading && (typeof cards === 'undefined' || cards.length === 0) && (
+                    <div className="text-center text-gray-500 py-4">No cards in this deck.</div>
+                )}
 
                 {cards && cards.length > 0 && (
                     <div className="overflow-x-auto border border-gray-200 rounded-md">
@@ -309,7 +358,10 @@ export default function DeckOverviewPage() {
                                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 19.94a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125M12 12.75l6.75-6.75" /></svg>
                                             </Button>
                                             <Button onClick={() => handleDeleteCard(card.id)} variant="primary" size="sm" className="!p-1.5" disabled={deleteCardMutation.isPending && deleteCardMutation.variables?.cardId === card.id}>
-                                                {(deleteCardMutation.isPending && deleteCardMutation.variables?.cardId === card.id) ? <Spinner size="sm" /> : <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12.56 0c1.153 0 2.24.032 3.22.096M15 5.25a3 3 0 11-6 0 3 3 0 016 0zm6 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                                                {(deleteCardMutation.isPending && deleteCardMutation.variables?.cardId === card.id) ? <Spinner size="sm" /> :
+                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" className="w-4 h-4">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 6h18M5 6V4.5C5 3.675 5.675 3 6.5 3h11C18.325 3 19 3.675 19 4.5V6M10 10.5v6M14 10.5v6M6 18h12a2 2 0 002-2V8H4v8a2 2 0 002 2z" />
+                                                    </svg>}
                                             </Button>
                                         </td>
                                     </tr>
