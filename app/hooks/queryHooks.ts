@@ -44,6 +44,12 @@ import {
     applyAIEditsAction
 } from '@/actions/aiEdits';
 import type { AICardEditSuggestion } from '@/types';
+import {
+    generateAICardsForNewDeckAction,
+    createDeckWithAICardsAction,
+    type GeneratedCardData
+} from '@/actions/aiDecks';
+import { useAuth } from '@/context/useAuth'; // Added import for useAuth
 
 // Remove unused client functions
 // import {
@@ -652,4 +658,50 @@ export const useApplyAIEditsMutation = () => {
         },
     });
 };
+
+export function useGenerateAICardsMutation() {
+    const { token } = useAuth();
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (data: { userInstructions: string; numberOfCards: number }) =>
+            generateAICardsForNewDeckAction(data.userInstructions, data.numberOfCards, token ?? undefined),
+        onSuccess: (data) => {
+            if (data.success) {
+                // Optionally, could invalidate something or show a global success message
+                // For now, page-specific handling is probably better
+            } else {
+                // Error handled by the component
+            }
+        },
+        onError: (error) => {
+            // Error handled by the component
+            console.error("Error in useGenerateAICardsMutation:", error);
+        },
+    });
+}
+
+export function useCreateDeckWithAICardsMutation() {
+    const { token } = useAuth();
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: (data: { deckName: string; cardsData: GeneratedCardData[] }) =>
+            createDeckWithAICardsAction(data.deckName, data.cardsData, token ?? undefined),
+        onSuccess: (data) => {
+            if (data.success && data.deck) {
+                queryClient.invalidateQueries({ queryKey: ['decks'] });
+                queryClient.invalidateQueries({ queryKey: ['deck', data.deck.id] });
+                queryClient.invalidateQueries({ queryKey: ['deckCards', data.deck.id] });
+                // Redirect will be handled by the component
+            } else {
+                // Error handled by the component
+            }
+        },
+        onError: (error) => {
+            // Error handled by the component
+            console.error("Error in useCreateDeckWithAICardsMutation:", error);
+        },
+    });
+}
 

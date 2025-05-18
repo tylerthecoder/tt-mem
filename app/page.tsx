@@ -224,6 +224,10 @@ export default function HomePage() {
                     <Button variant="secondary" onClick={() => setIsImportModalOpen(true)} disabled={isLoading}>
                         Import Deck from JSON
                     </Button>
+                    {/* AI Generate Deck Button */}
+                    <Link href="/deck/ai-generate" passHref legacyBehavior>
+                        <Button as="a" variant="secondary" disabled={isLoading}>Create Deck with AI</Button>
+                    </Link>
                     {/* AI Quiz Button */}
                     <Link href="/quiz" passHref legacyBehavior>
                         <Button as="a" variant="secondary" disabled={isLoading}>AI Quiz Generator</Button>
