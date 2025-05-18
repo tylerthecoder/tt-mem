@@ -38,6 +38,12 @@ import {
     scoreQuizAnswerAction
 } from '@/actions/quiz';
 import type { QuizSet, QuestionAnswerPair } from '@/types';
+// Import AI Deck Edit Actions and types
+import {
+    getAIEditSuggestionsAction,
+    applyAIEditsAction
+} from '@/actions/aiEdits';
+import type { AICardEditSuggestion } from '@/types';
 
 // Remove unused client functions
 // import {
@@ -566,6 +572,84 @@ export const useScoreQuizAnswerMutation = () => {
             console.error("Score Quiz Answer Mutation Error:", error);
         },
         // No specific onSuccess needed unless updating UI based on attempts cache
+    });
+};
+
+// --- AI Deck Edit Hooks ---
+
+// Type for the result of getAIEditSuggestionsAction (for hook)
+interface AIEditSuggestionsData {
+    suggestions: AICardEditSuggestion[];
+}
+
+// Type for applyAIEditsAction result (for hook)
+interface ApplyAIEditsData {
+    appliedCount: number;
+    failedCount: number;
+    failureDetails?: { edit: AICardEditSuggestion, message: string }[];
+    message: string; // Overall message from the action
+}
+
+// Mutation hook for getting AI edit suggestions
+export const useGetAIEditSuggestionsMutation = () => {
+    return useMutation<
+        AIEditSuggestionsData, // Returns the suggestions array wrapped
+        Error,
+        { deckId: string; userPrompt: string; token: string | undefined | null } // Takes deckId, prompt, token
+    >({
+        mutationFn: async ({ deckId, userPrompt, token }) => {
+            const result = await getAIEditSuggestionsAction(deckId, userPrompt, token ?? undefined);
+            if (!result.success || typeof result.suggestions === 'undefined') {
+                throw new Error(result.message || 'Failed to get AI edit suggestions.');
+            }
+            return { suggestions: result.suggestions };
+        },
+        onError: (error) => {
+            console.error("Get AI Edit Suggestions Mutation Error:", error);
+        },
+    });
+};
+
+// Mutation hook for applying AI edits
+export const useApplyAIEditsMutation = () => {
+    const queryClient = useQueryClient();
+
+    return useMutation<
+        ApplyAIEditsData, // Returns the summary of application
+        Error,
+        { deckId: string; edits: AICardEditSuggestion[]; token: string | undefined | null } // Takes deckId, edits array, token
+    >({
+        mutationFn: async ({ deckId, edits, token }) => {
+            const result = await applyAIEditsAction(deckId, edits, token ?? undefined);
+            // Action already returns success true/false and includes counts/messages
+            if (!result.success && result.failedCount === edits.length && edits.length > 0) {
+                // If all edits failed and there was at least one edit, it's an operational error
+                // but the hook should still resolve with the details from the action.
+                // The action itself forms the error message in this case.
+            }
+            if (!result.success && result.message === 'Unauthorized.') {
+                // Propagate unauthorized specifically if needed, though global handler should also catch it
+                throw new Error(result.message);
+            }
+            // The hook succeeds if the action was called, returning the action's result.
+            // The `success` field within ApplyAIEditsData indicates if all edits were applied without issues.
+            return {
+                appliedCount: result.appliedCount,
+                failedCount: result.failedCount,
+                failureDetails: result.failureDetails,
+                message: result.message || (result.success ? 'Edits applied.' : 'Some edits failed.')
+            };
+        },
+        onSuccess: (data, variables) => {
+            // Invalidate deck cards and deck details to reflect changes
+            queryClient.invalidateQueries({ queryKey: queryKeys.cards.forDeck(variables.deckId) });
+            queryClient.invalidateQueries({ queryKey: queryKeys.decks.detail(variables.deckId) });
+            // Optionally: show a toast or notification based on data.message
+        },
+        onError: (error) => {
+            console.error("Apply AI Edits Mutation Error:", error);
+            // This usually catches network errors or if the mutationFn itself throws an unhandled exception
+        },
     });
 };
 

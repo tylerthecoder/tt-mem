@@ -126,3 +126,27 @@ export interface QuizAttempt {
     llm_rationale?: string;
     createdAt: Date;
 }
+
+// --- AI Deck Edit Types ---
+
+export interface AICreateCardSuggestion {
+    type: 'create';
+    front_text: string;
+    back_text: string;
+    extra_context?: string; // Consistent with Quiz generation
+}
+
+export interface AIUpdateCardSuggestion {
+    type: 'update';
+    cardId: string;          // ID of the card to update
+    front_text?: string;     // Optional: only provide if changing
+    back_text?: string;      // Optional: only provide if changing
+    extra_context?: string;  // Optional: only provide if changing
+}
+
+export interface AIDeleteCardSuggestion {
+    type: 'delete';
+    cardId: string;          // ID of the card to delete
+}
+
+export type AICardEditSuggestion = AICreateCardSuggestion | AIUpdateCardSuggestion | AIDeleteCardSuggestion;

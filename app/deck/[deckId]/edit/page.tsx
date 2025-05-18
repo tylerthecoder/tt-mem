@@ -8,11 +8,16 @@ import {
     useDeck,
     useCreateCardMutation,
     useUpdateCardMutation,
-    useDeleteCardMutation
+    useDeleteCardMutation,
+    useGetAIEditSuggestionsMutation,
+    useApplyAIEditsMutation
 } from '@/hooks/queryHooks';
 import Button from '@/components/Button';
 import { useAuth } from '@/context/useAuth';
-import type { Card } from '@/types';
+import type { Card, AICardEditSuggestion } from '@/types';
+import AIEditPromptModal from '@/components/AIEditPromptModal';
+import AIEditReviewList from '@/components/AIEditReviewList';
+import Spinner from '@/components/Spinner';
 
 // --- Card Form Modal (Simple Example) ---
 interface CardFormModalProps {
@@ -99,6 +104,13 @@ export default function EditDeckPage() {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editingCard, setEditingCard] = useState<Card | null>(null);
 
+    // --- AI Edit State ---
+    const [isAIPromptModalOpen, setIsAIPromptModalOpen] = useState(false);
+    const [aiSuggestions, setAISuggestions] = useState<AICardEditSuggestion[] | null>(null);
+    const [aiSuggestionsError, setAISuggestionsError] = useState<string | null>(null);
+    const [applyAIEditsSuccessMessage, setApplyAIEditsSuccessMessage] = useState<string | null>(null);
+    // --- End AI Edit State ---
+
     // Use the real hook for deck details
     const { data: deck, isLoading: deckLoading, error: deckError } = useDeck(deckId);
 
@@ -109,6 +121,11 @@ export default function EditDeckPage() {
     const createCardMutation = useCreateCardMutation();
     const updateCardMutation = useUpdateCardMutation();
     const deleteCardMutation = useDeleteCardMutation();
+
+    // --- AI Edit Mutations ---
+    const getAISuggestionsMutation = useGetAIEditSuggestionsMutation();
+    const applyAIEditsMutation = useApplyAIEditsMutation();
+    // --- End AI Edit Mutations ---
 
     // Event Handlers using mutations
     const handleAddCardSubmit = (front: string, back: string) => {
@@ -157,16 +174,74 @@ export default function EditDeckPage() {
         setIsEditModalOpen(true);
     };
 
+    // --- AI Edit Handlers ---
+    const handleOpenAIPromptModal = () => {
+        setAISuggestions(null);
+        setAISuggestionsError(null);
+        setApplyAIEditsSuccessMessage(null);
+        setIsAIPromptModalOpen(true);
+    };
+
+    const handleSubmitAIPrompt = (prompt: string) => {
+        if (!deckId || !token) return;
+        setAISuggestionsError(null);
+        setApplyAIEditsSuccessMessage(null);
+
+        getAISuggestionsMutation.mutate({ deckId, userPrompt: prompt, token }, {
+            onSuccess: (data) => {
+                setAISuggestions(data.suggestions);
+                setIsAIPromptModalOpen(false);
+            },
+            onError: (error) => {
+                setAISuggestionsError(error.message);
+            }
+        });
+    };
+
+    const handleApplyAIEdits = (selectedEdits: AICardEditSuggestion[]) => {
+        if (!deckId || !token) return;
+        setApplyAIEditsSuccessMessage(null);
+
+        applyAIEditsMutation.mutate({ deckId, edits: selectedEdits, token }, {
+            onSuccess: (data) => {
+                setApplyAIEditsSuccessMessage(data.message || 'Edits applied successfully!');
+            },
+            onError: (error) => {
+            }
+        });
+    };
+
+    const handleCancelAIReview = () => {
+        setAISuggestions(null);
+        setAISuggestionsError(null);
+        setApplyAIEditsSuccessMessage(null);
+        getAISuggestionsMutation.reset();
+        applyAIEditsMutation.reset();
+    };
+    // --- End AI Edit Handlers ---
+
     // Loading/Error states
     if (deckId === undefined) {
         return <div className="text-center text-red-500">Invalid Deck ID</div>;
     }
     const isLoading = deckLoading || cardsLoading;
-    const mutationLoading = createCardMutation.isPending || updateCardMutation.isPending || deleteCardMutation.isPending;
-    const error = deckError || cardsError || createCardMutation.error || updateCardMutation.error || deleteCardMutation.error;
+    const mutationLoading = createCardMutation.isPending || updateCardMutation.isPending || deleteCardMutation.isPending || getAISuggestionsMutation.isPending || applyAIEditsMutation.isPending;
+
+    // Consolidate error checking for the main page error display
+    let pageDisplayError: string | null = null;
+    if (deckError) pageDisplayError = deckError.message;
+    else if (cardsError) pageDisplayError = cardsError.message;
+    // Mutations errors are handled by their respective components or inline
+    // else if (createCardMutation.error) pageDisplayError = createCardMutation.error.message;
+    // else if (updateCardMutation.error) pageDisplayError = updateCardMutation.error.message;
+    // else if (deleteCardMutation.error) pageDisplayError = deleteCardMutation.error.message;
+    // AI suggestion/apply errors are handled in their specific UI sections
 
     if (isLoading && (!deck || !cards)) return <div className="text-center text-gray-500 py-10">Loading deck details...</div>;
-    if (error) return <div className="text-center text-red-500 p-4 bg-red-50 rounded border border-red-200">Error: {error.message || 'Unknown error'}</div>;
+    // Use the consolidated pageDisplayError here
+    if (pageDisplayError && !aiSuggestions) { // Only show general page error if not in AI review flow
+        return <div className="text-center text-red-500 p-4 bg-red-50 rounded border border-red-200">Error: {pageDisplayError}</div>;
+    }
 
     return (
         <div className="space-y-8 pb-12">
@@ -182,12 +257,32 @@ export default function EditDeckPage() {
             <hr className="border-gray-300" />
 
             {token ? (
-                <Button onClick={openAddModal} variant="primary" disabled={mutationLoading}>
-                    Add New Card
-                </Button>
+                <div className="flex flex-wrap gap-3">
+                    <Button onClick={openAddModal} variant="primary" disabled={mutationLoading}>
+                        Add New Card
+                    </Button>
+                    <Button onClick={handleOpenAIPromptModal} variant="secondary" disabled={getAISuggestionsMutation.isPending || applyAIEditsMutation.isPending}>
+                        AI Edit Assistant
+                    </Button>
+                </div>
             ) : (
                 <p className="text-center text-gray-500">Please login to manage cards.</p>
             )}
+
+            {/* --- AI Edit Review List --- */}
+            {aiSuggestions && (
+                <div className="my-6 p-4 border border-dashed border-primary rounded-lg bg-primary/5">
+                    <AIEditReviewList
+                        suggestions={aiSuggestions}
+                        onApplyEdits={handleApplyAIEdits}
+                        onCancel={handleCancelAIReview}
+                        isApplying={applyAIEditsMutation.isPending}
+                        applyError={applyAIEditsMutation.error?.message || null}
+                        applySuccessMessage={applyAIEditsSuccessMessage}
+                    />
+                </div>
+            )}
+            {/* --- End AI Edit Review List --- */}
 
             <h2 className="text-2xl font-semibold text-gray-900 pt-4">Cards in Deck</h2>
             {cardsLoading && <div className="text-center text-gray-500 py-6">Loading cards...</div>}
@@ -234,6 +329,20 @@ export default function EditDeckPage() {
                 isLoading={updateCardMutation.isPending}
                 title="Edit Card"
             />
+
+            {/* --- AI Edit Prompt Modal --- */}
+            <AIEditPromptModal
+                isOpen={isAIPromptModalOpen}
+                onClose={() => {
+                    setIsAIPromptModalOpen(false);
+                    getAISuggestionsMutation.reset();
+                    setAISuggestionsError(null);
+                }}
+                onSubmitPrompt={handleSubmitAIPrompt}
+                isLoading={getAISuggestionsMutation.isPending}
+                error={aiSuggestionsError || (getAISuggestionsMutation.error instanceof Error ? getAISuggestionsMutation.error.message : null)}
+            />
+            {/* --- End AI Edit Prompt Modal --- */}
         </div>
     );
 }
