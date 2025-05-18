@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { z } from 'zod';
 import {
     useDecks,
-    useCreateDeckMutation,
     useDeleteDeckMutation,
     useImportDeckMutation,
 } from '@/hooks/queryHooks';
@@ -58,24 +57,19 @@ function ImportDeckModal({ isOpen, onClose, onSubmit, isLoading }: ImportDeckMod
             return;
         }
 
-        // Validate using Zod - Use cardImportSchema as value here
         const validationResult = cardImportSchema.safeParse(parsedData);
 
         if (!validationResult.success) {
             const formattedErrors = validationResult.error.errors.map(err => {
                 const path = err.path.join('.');
-                // Improve error message slightly
                 return `${path ? `Card[${path}]: ` : ''}${err.message}`;
             }).join('\n');
             setValidationError(`JSON validation failed:\n${formattedErrors}`);
             return;
         }
-
-        // Submit the validated array (validationResult.data)
         onSubmit(deckName.trim(), validationResult.data);
     };
 
-    // Clear form on close
     const handleClose = () => {
         setDeckName('');
         setJsonInput('');
@@ -90,7 +84,6 @@ function ImportDeckModal({ isOpen, onClose, onSubmit, isLoading }: ImportDeckMod
             <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg">
                 <h2 className="text-xl font-semibold mb-4 text-gray-900">Import New Deck</h2>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Deck Name Input */}
                     <div>
                         <label htmlFor="import-deck-name" className="block text-sm font-medium text-gray-700 mb-1">New Deck Name</label>
                         <input
@@ -104,7 +97,6 @@ function ImportDeckModal({ isOpen, onClose, onSubmit, isLoading }: ImportDeckMod
                             disabled={isLoading}
                         />
                     </div>
-                    {/* JSON Input Textarea */}
                     <div>
                         <label htmlFor="import-json-data" className="block text-sm font-medium text-gray-700 mb-1">Paste Card JSON Here</label>
                         <textarea
@@ -112,16 +104,7 @@ function ImportDeckModal({ isOpen, onClose, onSubmit, isLoading }: ImportDeckMod
                             rows={10}
                             value={jsonInput}
                             onChange={handleJsonChange}
-                            placeholder='[
-  {
-    "front": "Example Front 1",
-    "back": "Example Back 1"
-  },
-  {
-    "front": "Example Front 2",
-    "back": "Example Back 2"
-  }
-]'
+                            placeholder='[\n  {\n    "front": "Example Front 1",\n    "back": "Example Back 1"\n  },\n  {\n    "front": "Example Front 2",\n    "back": "Example Back 2"\n  }\n]'
                             required
                             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary font-mono text-sm"
                             disabled={isLoading}
@@ -131,15 +114,12 @@ function ImportDeckModal({ isOpen, onClose, onSubmit, isLoading }: ImportDeckMod
                         )}
                         <p className="text-xs text-gray-500 mt-1">
                             Expected format: An array of objects, each with non-empty "front" and "back" string properties.
-                            {/* Link to markdown file - assuming it's served or accessible */}
-                            {/* If not served, remove the link */}
                             See <a href="/deck-import-format.md" target="_blank" rel="noopener noreferrer" className="underline text-primary">format details</a>.
                         </p>
                     </div>
-                    {/* Action Buttons */}
                     <div className="flex justify-end space-x-2 pt-4">
-                        <Button type="button" variant="default" onClick={handleClose} disabled={isLoading}>Cancel</Button>
-                        <Button type="submit" variant="primary" disabled={isLoading || !deckName.trim() || !jsonInput.trim()}>
+                        <Button type="button" variant="default" onClick={handleClose} disabled={isLoading} size="sm">Cancel</Button>
+                        <Button type="submit" variant="primary" disabled={isLoading || !deckName.trim() || !jsonInput.trim()} size="sm">
                             {isLoading ? 'Importing...' : 'Import Deck'}
                         </Button>
                     </div>
@@ -149,40 +129,17 @@ function ImportDeckModal({ isOpen, onClose, onSubmit, isLoading }: ImportDeckMod
     );
 }
 
-// Renamed component to follow Next.js conventions (PascalCase)
 export default function HomePage() {
-    // Use the real hook for fetching
     const { data: decks, isLoading: decksLoading, error: decksError } = useDecks();
-    const createDeckMutation = useCreateDeckMutation();
     const deleteDeckMutation = useDeleteDeckMutation();
-    const importDeckMutation = useImportDeckMutation(); // Use the import hook
+    const importDeckMutation = useImportDeckMutation();
     const { token } = useAuth();
 
-    const [newDeckName, setNewDeckName] = useState('');
-    const [isImportModalOpen, setIsImportModalOpen] = useState(false); // State for modal
-
-    const handleCreateDeck = (event: React.FormEvent) => {
-        event.preventDefault();
-        if (!newDeckName.trim() || !token) return;
-        // Pass token to the mutation variables
-        createDeckMutation.mutate(
-            { name: newDeckName.trim(), token },
-            {
-                onSuccess: () => {
-                    setNewDeckName('');
-                },
-                onError: (err) => {
-                    console.error("Failed to create deck:", err);
-                    alert(`Failed to create deck: ${err.message}`);
-                }
-            }
-        );
-    };
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     const handleDeleteDeck = (deckId: string) => {
         if (!token) return;
         if (window.confirm('Are you sure you want to delete this deck?')) {
-            // Pass token to the mutation variables
             deleteDeckMutation.mutate({ deckId, token }, {
                 onError: (err) => {
                     console.error("Failed to delete deck:", err);
@@ -192,113 +149,85 @@ export default function HomePage() {
         }
     };
 
-    // Handler for import submission
     const handleImportDeckSubmit = (deckName: string, cardsData: ValidatedImportData) => {
         if (!token) return;
-
         importDeckMutation.mutate({ deckName, cardsData, token }, {
             onSuccess: (newDeck) => {
-                setIsImportModalOpen(false); // Close modal on success
+                setIsImportModalOpen(false);
                 alert(`Deck "${newDeck.name}" imported successfully!`);
-                // Query invalidation handled by the hook
             },
             onError: (err) => {
                 console.error("Failed to import deck:", err);
-                // Display the error from the mutation hook (which includes validation details)
                 alert(`Failed to import deck: ${err.message}`);
             }
         });
     };
 
-    const isLoading = decksLoading || createDeckMutation.isPending || deleteDeckMutation.isPending || importDeckMutation.isPending;
-    const error = decksError || createDeckMutation.error || deleteDeckMutation.error || importDeckMutation.error;
+    const isLoadingOverall = decksLoading || deleteDeckMutation.isPending || importDeckMutation.isPending;
+    const overallError = decksError || deleteDeckMutation.error || importDeckMutation.error;
 
     return (
         <div className="space-y-8">
-            <h1 className="text-3xl font-bold text-primary">My Decks</h1>
+            <h1 className="text-3xl font-bold text-gray-800">My Decks</h1>
 
-            {/* Action Buttons Group */}
+            {/* Action Buttons Panel */}
             {token && (
-                <div className="flex flex-wrap gap-3 items-center">
-                    {/* Import Button */}
-                    <Button variant="secondary" onClick={() => setIsImportModalOpen(true)} disabled={isLoading}>
-                        Import Deck from JSON
-                    </Button>
-                    {/* AI Generate Deck Button */}
-                    <Link href="/deck/ai-generate" passHref legacyBehavior>
-                        <Button as="a" variant="secondary" disabled={isLoading}>Create Deck with AI</Button>
-                    </Link>
-                    {/* AI Quiz Button */}
-                    <Link href="/quiz" passHref legacyBehavior>
-                        <Button as="a" variant="secondary" disabled={isLoading}>AI Quiz Generator</Button>
-                    </Link>
+                <div className="p-4 sm:p-6 bg-primary/10 rounded-lg shadow-md">
+                    <h2 className="text-xl font-semibold text-primary mb-4">Actions</h2>
+                    <div className="flex flex-wrap gap-3 items-center">
+                        <Button variant="secondary" size="sm" onClick={() => setIsImportModalOpen(true)} disabled={isLoadingOverall}>
+                            Import Deck (JSON)
+                        </Button>
+                        <Link href="/deck/ai-generate" passHref legacyBehavior>
+                            <Button as="a" variant="secondary" size="sm" disabled={isLoadingOverall}>Create with AI</Button>
+                        </Link>
+                        <Link href="/play/select" passHref legacyBehavior>
+                            <Button as="a" variant="secondary" size="sm" disabled={isLoadingOverall}>Play Selected Decks</Button>
+                        </Link>
+                        <Link href="/quiz" passHref legacyBehavior>
+                            <Button as="a" variant="secondary" size="sm" disabled={isLoadingOverall}>AI Quiz Generator</Button>
+                        </Link>
+                    </div>
                 </div>
             )}
 
-            {/* Create New Deck Form */}
-            {token && (
-                <form onSubmit={handleCreateDeck} className="flex flex-col sm:flex-row sm:items-end gap-3 p-4 sm:p-6 bg-white rounded-lg shadow">
-                    <div className="flex-grow">
-                        <label htmlFor="new-deck-name" className="block text-sm font-medium text-gray-700 mb-1">New Deck Name</label>
-                        <input
-                            id="new-deck-name"
-                            type="text"
-                            value={newDeckName}
-                            onChange={(e) => setNewDeckName(e.target.value)}
-                            placeholder="Enter deck name..."
-                            required
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary focus:border-primary"
-                            disabled={createDeckMutation.isPending}
-                        />
-                    </div>
-                    <Button
-                        type="submit"
-                        variant="primary"
-                        disabled={createDeckMutation.isPending || !newDeckName.trim()}
-                        className="flex-shrink-0"
-                    >
-                        {createDeckMutation.isPending ? 'Creating...' : 'Create Deck'}
-                    </Button>
-                </form>
-            )}
             {!token && (
-                <p className="text-center text-gray-500">Please <Link href="/login" className="text-primary underline hover:text-red-700">login</Link> to create or manage decks.</p>
+                <p className="text-center text-gray-500 py-6">Please <Link href="/login" className="text-primary underline hover:text-red-700">login</Link> to manage your decks.</p>
             )}
 
             {/* Deck List */}
             {decksLoading && <div className="text-center text-gray-500 py-6">Loading decks...</div>}
-            {error && <div className="text-center text-red-500 p-4 bg-red-50 rounded border border-red-200">Error loading data: {error.message || 'Unknown error'}</div>}
-            {!decksLoading && !error && decks && (
+            {overallError && <div className="text-center text-red-500 p-4 bg-red-50 rounded border border-red-200">Error loading data: {overallError.message || 'Unknown error'}</div>}
+            {token && !decksLoading && !overallError && decks && (
                 <ul className="space-y-4">
                     {decks.map((deck: Deck) => (
                         <li
                             key={deck.id}
-                            className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 sm:p-5 bg-white rounded-lg shadow"
+                            className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 sm:p-5 bg-white rounded-lg shadow-md border border-gray-200 hover:shadow-lg transition-shadow duration-150"
                         >
-                            <span className="font-medium text-lg text-gray-900 break-words flex-grow">{deck.name}</span>
+                            <Link href={`/deck/${deck.id}/overview`} className="font-medium text-lg text-primary hover:underline break-words flex-grow">
+                                {deck.name}
+                            </Link>
                             <div className="flex flex-shrink-0 flex-wrap gap-2 mt-2 sm:mt-0 self-end sm:self-center">
-                                <Link href={`/deck/${deck.id}/overview`} passHref legacyBehavior><Button as="a" variant="secondary" size="sm">Play</Button></Link>
+                                <Link href={`/deck/${deck.id}/play`} passHref legacyBehavior><Button as="a" variant="default" size="sm">Play</Button></Link>
                                 <Link href={`/deck/${deck.id}/edit`} passHref legacyBehavior><Button as="a" variant="default" size="sm">Edit</Button></Link>
-                                {token && (
-                                    <Button
-                                        onClick={() => handleDeleteDeck(deck.id)}
-                                        variant="primary"
-                                        size="sm"
-                                        disabled={deleteDeckMutation.isPending && deleteDeckMutation.variables?.deckId === deck.id}
-                                    >
-                                        {(deleteDeckMutation.isPending && deleteDeckMutation.variables?.deckId === deck.id) ? 'Deleting...' : 'Delete'}
-                                    </Button>
-                                )}
+                                <Button
+                                    onClick={() => handleDeleteDeck(deck.id)}
+                                    variant="primary"
+                                    size="sm"
+                                    disabled={deleteDeckMutation.isPending && deleteDeckMutation.variables?.deckId === deck.id}
+                                >
+                                    {(deleteDeckMutation.isPending && deleteDeckMutation.variables?.deckId === deck.id) ? 'Deleting...' : 'Delete'}
+                                </Button>
                             </div>
                         </li>
                     ))}
                     {decks.length === 0 && (
-                        <p className="text-center text-gray-500 py-6">No decks found. {token ? 'Create one above!' : 'Login to create decks.'}</p>
+                        <p className="text-center text-gray-500 py-10">No decks found. Use the actions above to create or import a new deck!</p>
                     )}
                 </ul>
             )}
 
-            {/* Import Deck Modal */}
             <ImportDeckModal
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}

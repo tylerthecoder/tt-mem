@@ -1,104 +1,128 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
+import React, { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { useCardsForReview, useCreateReviewEventMutation } from '@/hooks/queryHooks';
-import { useAuth } from '@/context/useAuth';
 import Button from '@/components/Button';
-import Spinner from '@/components/Spinner';
+import { useCardsForReview, useCreateReviewEventMutation } from '@/hooks/queryHooks';
+import { ReviewResult, Card } from '@/types';
 import CardReviewer from '@/components/CardReviewer';
-import type { ReviewResult } from '@/types';
+import Spinner from '@/components/Spinner';
+import { useAuth } from '@/context/useAuth';
 
-// Helper function to build query string preserving params
-function buildPlayQueryString(currentParams: URLSearchParams, newParams: Record<string, string>): string {
-    const params = new URLSearchParams(currentParams);
-    Object.entries(newParams).forEach(([key, value]) => {
-        params.set(key, value);
-    });
-    return params.toString();
+// Helper function to shuffle array (if not already in a utils file)
+function shuffleArray<T>(array: T[]): T[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
 }
 
-// Original page content moved to this client component
-function PlayPageClientContent() {
+function PlayPageContent() {
     const searchParams = useSearchParams();
-    const { token, isLoading: isAuthLoading } = useAuth();
+    const { token, isLoading: isLoadingAuth } = useAuth();
 
-    // Get params or use defaults
-    const strategy = searchParams.get('strategy') === 'missedFirst' ? 'missedFirst' : 'random';
+    const strategyParam = searchParams.get('strategy');
     const limitParam = searchParams.get('limit');
-    const limit = limitParam && !isNaN(parseInt(limitParam)) ? parseInt(limitParam) : 100;
     const isFlipped = searchParams.get('flipped') === 'true';
+    const deckIdsParam = searchParams.get('deckIds'); // New: get deckIds from URL
 
-    // State for current card index
-    const [currentCardIndex, setCurrentCardIndex] = useState<number>(0);
+    const strategy = (strategyParam === 'random' || strategyParam === 'missedFirst') ? strategyParam : 'random';
+    const limit = parseInt(limitParam || '20', 10);
+    const selectedDeckIds = deckIdsParam ? deckIdsParam.split(',').filter(id => id.trim() !== '') : undefined; // New: parse deckIds
 
-    // Fetch cards for review session
-    const { data: reviewSequence, isLoading: isLoadingCards, error: cardsError, refetch } = useCardsForReview({
-        token: token ?? undefined,
+    const { data: cards, isLoading: isLoadingCards, error: cardsError, refetch } = useCardsForReview({
+        // deckId: undefined, // Explicitly not using single deckId here when deckIds might be present
+        deckIds: selectedDeckIds, // New: pass selectedDeckIds
         limit,
         strategy,
-        enabled: !!token, // Only run query if token is available
+        token: token ?? undefined, // Coalesce null to undefined
+        enabled: !isLoadingAuth && !!token, // Only enable if auth is loaded and token exists
     });
 
     const createReviewMutation = useCreateReviewEventMutation();
 
+    const [currentCardIndex, setCurrentCardIndex] = React.useState<number>(0);
+    const [reviewSequence, setReviewSequence] = React.useState<Card[]>([]);
+
+    React.useEffect(() => {
+        if (cards && cards.length > 0) {
+            // The hook already implements strategies like missedFirst or random sampling.
+            // Shuffling here might be redundant if strategy is random, but okay for consistency or if strategy changes.
+            setReviewSequence(shuffleArray(cards));
+            setCurrentCardIndex(0);
+        } else {
+            setReviewSequence([]);
+        }
+    }, [cards]);
+
     const handleReview = (result: ReviewResult) => {
-        if (!reviewSequence || reviewSequence.length === 0 || !token || createReviewMutation.isPending) return;
+        if (!reviewSequence || reviewSequence.length === 0 || createReviewMutation.isPending) return;
         const safeIndex = currentCardIndex;
         if (safeIndex >= reviewSequence.length) return;
 
-        const currentCard = reviewSequence[safeIndex];
+        const cardId = reviewSequence[safeIndex].id;
+        // deckId for review event: if playing multiple decks, this might be ambiguous.
+        // For now, using the card's actual deck_id. createReviewEventAction might need this.
+        // Or, we decide not to pass deckId if it's a multi-deck session, and the action handles it.
+        // Assuming createReviewEventAction can get deck_id from card_id or doesn't strictly need it if ambiguous.
+        const cardDeckId = reviewSequence[safeIndex].deck_id;
 
-        createReviewMutation.mutate(
-            {
-                cardId: currentCard.id,
-                deckId: currentCard.deck_id,
-                result,
+        createReviewMutation.mutate({ cardId, deckId: cardDeckId, result }, {
+            onSuccess: () => {
+                const nextIndex = currentCardIndex + 1;
+                setCurrentCardIndex(nextIndex);
             },
-            {
-                onSuccess: () => {
-                    const nextIndex = currentCardIndex + 1;
-                    setCurrentCardIndex(nextIndex);
-                },
-                onError: (err) => {
-                    alert(`Failed to record review: ${err.message}`);
-                },
+            onError: (err) => {
+                alert(`Failed to record review: ${err.message}`);
             }
-        );
+        });
     };
 
     const handlePlayAgain = () => {
-        refetch();
+        refetch(); // Refetch cards based on the same criteria
         setCurrentCardIndex(0);
     };
 
-    const isLoading = isAuthLoading || isLoadingCards;
-
-    if (isLoading) {
+    if (isLoadingAuth || (isLoadingCards && !cards)) {
         return (
-            <div className="flex justify-center items-center py-10">
-                <Spinner /> <span className="ml-2 text-gray-500">Loading review session...</span>
+            <div className="flex flex-col justify-center items-center min-h-[300px]">
+                <Spinner />
+                <p className="mt-2 text-gray-500">{isLoadingAuth ? 'Authenticating...' : 'Loading cards...'}</p>
             </div>
         );
     }
 
-    if (!token) {
-        return <div className="text-center text-gray-500 py-10">Please <Link href="/login" className="text-primary underline hover:text-red-700">login</Link> to play.</div>;
+    if (!token && !isLoadingAuth) {
+        return (
+            <div className="text-center py-10">
+                <p className="mb-4 text-lg text-gray-700">You need to be logged in to play.</p>
+                <Link href="/login" legacyBehavior passHref><Button as="a">Login</Button></Link>
+            </div>
+        );
     }
 
     if (cardsError) {
         return <div className="text-center text-red-500 p-4 bg-red-50 rounded border border-red-200">Error loading cards: {(cardsError as Error).message || 'Unknown error'}.</div>;
     }
 
-    if (!reviewSequence || reviewSequence.length === 0) {
+    if (!isLoadingCards && (!reviewSequence || reviewSequence.length === 0)) {
         return (
             <div className="text-center space-y-6 py-10">
-                <p className="text-xl text-gray-600">No cards found for this review session.</p>
-                <p className="text-gray-500">You might not have any cards yet, or none matched the '{strategy}' strategy.</p>
+                <p className="text-lg text-gray-500">No cards found for this session.</p>
+                <p className="text-sm text-gray-400">
+                    Try adjusting your strategy, selecting different decks, or adding more cards.
+                </p>
                 <div className="flex flex-wrap justify-center gap-3">
-                    <Link href={`/`} passHref legacyBehavior>
-                        <Button as="a" variant="default">Back to Decks</Button>
+                    {selectedDeckIds && selectedDeckIds.length > 0 && (
+                        <Link href="/play/select" passHref legacyBehavior>
+                            <Button as="a" variant="secondary">Change Selected Decks</Button>
+                        </Link>
+                    )}
+                    <Link href="/" passHref legacyBehavior>
+                        <Button as="a" variant="default">Back to My Decks</Button>
                     </Link>
                 </div>
             </div>
@@ -108,12 +132,16 @@ function PlayPageClientContent() {
     if (currentCardIndex >= reviewSequence.length) {
         return (
             <div className="text-center space-y-6 py-10">
-                <p className="text-2xl font-semibold text-green-600">Review Session Finished!</p>
-                <p className="text-gray-600">You reviewed {reviewSequence.length} cards.</p>
+                <p className="text-2xl font-semibold text-green-600">Session finished!</p>
                 <div className="flex flex-wrap justify-center gap-3">
-                    <Button onClick={handlePlayAgain} variant="secondary">Play Again ({strategy === 'missedFirst' ? 'Missed First' : 'Random'}, {limit})</Button>
-                    <Link href={`/`} passHref legacyBehavior>
-                        <Button as="a" variant="default">Back to Decks</Button>
+                    <Button onClick={handlePlayAgain} variant="secondary">Play Again (Same Settings)</Button>
+                    {selectedDeckIds && selectedDeckIds.length > 0 && (
+                        <Link href="/play/select" passHref legacyBehavior>
+                            <Button as="a" variant="default">Play Different Decks</Button>
+                        </Link>
+                    )}
+                    <Link href="/" passHref legacyBehavior>
+                        <Button as="a" variant="default">Back to My Decks</Button>
                     </Link>
                 </div>
             </div>
@@ -121,35 +149,24 @@ function PlayPageClientContent() {
     }
 
     const currentCard = reviewSequence[currentCardIndex];
+    if (!currentCard) {
+        // This case should ideally not be reached if reviewSequence is managed properly
+        return <div className="text-center text-gray-500 py-10">Loading card...</div>;
+    }
+
+    const sessionTitle = selectedDeckIds ? "Playing Selected Decks" : "Playing All Decks";
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
-                <Link href={`/`} className="text-sm text-primary hover:underline whitespace-nowrap">
-                    &larr; Back to Decks
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-2 mb-4">
+                <Link href={selectedDeckIds ? "/play/select" : "/"} className="text-sm text-primary hover:underline whitespace-nowrap">
+                    &larr; {selectedDeckIds ? "Change Selection" : "My Decks"}
                 </Link>
                 <h1 className="text-lg sm:text-xl font-semibold text-gray-700 text-center order-first sm:order-none">
-                    Reviewing All Decks ({strategy === 'missedFirst' ? 'Missed First' : 'Random'}, {limit})
+                    {sessionTitle} {isFlipped ? '(Flipped)' : ''} (Strategy: {strategy})
                 </h1>
-                <div className="text-center sm:text-right text-xs sm:min-w-[100px]">
-                    {strategy === 'random' ? (
-                        <Link
-                            href={`/play?${buildPlayQueryString(searchParams, { strategy: 'missedFirst' })}`}
-                            className="text-primary hover:underline"
-                            replace
-                        >
-                            Switch to Missed First
-                        </Link>
-                    ) : (
-                        <Link
-                            href={`/play?${buildPlayQueryString(searchParams, { strategy: 'random' })}`}
-                            className="text-primary hover:underline"
-                            replace
-                        >
-                            Switch to Random
-                        </Link>
-                    )}
-                </div>
+                {/* Placeholder for potential future actions like 'Edit current card' if applicable */}
+                <div></div> {/* Empty div for spacing, helps keep title centered */}
             </div>
             <hr className="border-gray-300" />
 
@@ -162,25 +179,17 @@ function PlayPageClientContent() {
                 isFlipped={isFlipped}
                 onReview={handleReview}
                 isPendingReview={createReviewMutation.isPending}
+            // deckName might not be relevant if playing from multiple decks
             />
         </div>
     );
 }
 
-// Loading component for Suspense fallback
-function LoadingState() {
+// Wrap with Suspense because useSearchParams() needs it.
+export default function PlayPage() {
     return (
-        <div className="flex justify-center items-center py-10">
-            <Spinner /> <span className="ml-2 text-gray-500">Loading play options...</span>
-        </div>
-    );
-}
-
-// Default export is now the server component wrapping the client component in Suspense
-export default function GlobalPlayPage() {
-    return (
-        <Suspense fallback={<LoadingState />}>
-            <PlayPageClientContent />
+        <Suspense fallback={<div className="flex justify-center items-center min-h-[300px]"><Spinner /><p className="ml-2">Loading play session...</p></div>}>
+            <PlayPageContent />
         </Suspense>
     );
 }

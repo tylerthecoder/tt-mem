@@ -477,7 +477,8 @@ export const useCard = (cardId: string | undefined, token: string | undefined) =
  * Requires auth token.
  */
 interface UseCardsForReviewOptions {
-    deckId?: string;
+    deckId?: string; // Kept for existing single-deck review strategy if ever used directly by /play
+    deckIds?: string[]; // New: for selecting multiple decks
     limit: number;
     strategy: 'random' | 'missedFirst';
     token: string | undefined;
@@ -485,16 +486,22 @@ interface UseCardsForReviewOptions {
 }
 
 export const useCardsForReview = ({
-    deckId,
+    deckId,      // For specific deck (legacy or direct single deck play)
+    deckIds,     // For multi-deck selection
     limit,
     strategy,
     token,
     enabled = true,
 }: UseCardsForReviewOptions) => {
-    // Generate a dynamic query key based on parameters
-    const queryKey = deckId
-        ? [...queryKeys.reviewSession.byDeck(deckId), { limit, strategy }]
-        : [...queryKeys.reviewSession.global(), { limit, strategy }];
+    const queryKeyParams: Record<string, any> = { limit, strategy };
+    if (deckIds && deckIds.length > 0) {
+        queryKeyParams.deckIds = deckIds.slice().sort().join(','); // Sort for consistent key
+    } else if (deckId) {
+        queryKeyParams.deckId = deckId;
+    }
+    // Base query key part
+    const baseQueryKey = queryKeys.reviewSession.global(); // Using global as a base
+    const queryKey = [...baseQueryKey, queryKeyParams];
 
     return useQuery<Card[], Error>({
         queryKey,
@@ -502,15 +509,17 @@ export const useCardsForReview = ({
             if (!token) {
                 return Promise.reject(new Error('Authentication token is required'));
             }
-            const result = await getCardsForReviewAction({ token, deckId, limit, strategy });
+            // Pass deckId OR deckIds to the action, not both usually.
+            // Action will prioritize deckIds if present.
+            const result = await getCardsForReviewAction({ token, deckId, deckIds, limit, strategy });
             if (!result.success || !result.cards) {
                 throw new Error(result.message || 'Failed to fetch cards for review');
             }
             return result.cards;
         },
         enabled: !!token && enabled,
-        staleTime: 0, // Don't cache review sessions aggressively
-        gcTime: 5 * 60 * 1000, // Keep in cache for 5 mins
+        staleTime: 0,
+        gcTime: 5 * 60 * 1000,
     });
 };
 
