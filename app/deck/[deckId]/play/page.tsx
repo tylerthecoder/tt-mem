@@ -24,7 +24,6 @@ export default function PlayDeckPage() {
     const searchParams = useSearchParams();
     const deckId = typeof params?.deckId === 'string' ? params.deckId : undefined;
     const isFlipped = searchParams.get('flipped') === 'true';
-    const shouldRandomize = searchParams.get('randomize') === 'true';
 
     const { data: cards, isLoading: isLoadingCards, error: cardsError } = useDeckCards(deckId);
     const createReviewMutation = useCreateReviewEventMutation();
@@ -35,13 +34,13 @@ export default function PlayDeckPage() {
 
     useEffect(() => {
         if (cards && cards.length > 0) {
-            const sequence = shouldRandomize ? shuffleArray(cards) : cards;
+            const sequence = shuffleArray(cards);
             setReviewSequence(sequence);
             setCurrentCardIndex(0);
         } else {
             setReviewSequence([]);
         }
-    }, [cards, shouldRandomize]);
+    }, [cards]);
 
     const handleReview = (result: ReviewResult) => {
         if (!reviewSequence || reviewSequence.length === 0 || deckId === undefined || createReviewMutation.isPending) return;
@@ -62,7 +61,7 @@ export default function PlayDeckPage() {
 
     const handlePlayAgain = () => {
         if (cards && cards.length > 0) {
-            const sequence = shouldRandomize ? shuffleArray(cards) : cards;
+            const sequence = shuffleArray(cards);
             setReviewSequence(sequence);
         }
         setCurrentCardIndex(0);
@@ -92,7 +91,7 @@ export default function PlayDeckPage() {
             <div className="text-center space-y-6 py-10">
                 <p className="text-2xl font-semibold text-green-600">Deck finished!</p>
                 <div className="flex flex-wrap justify-center gap-3">
-                    <Button onClick={handlePlayAgain} variant="secondary">Play Again {shouldRandomize ? '(Randomized)' : ''}</Button>
+                    <Button onClick={handlePlayAgain} variant="secondary">Play Again</Button>
                     <Link href={`/deck/${deckId}/overview`} passHref legacyBehavior>
                         <Button as="a" variant="default">Back to Overview</Button>
                     </Link>
@@ -116,10 +115,10 @@ export default function PlayDeckPage() {
                     &larr; Overview
                 </Link>
                 <h1 className="text-lg sm:text-xl font-semibold text-gray-700 text-center order-first sm:order-none">
-                    Playing: <span className="text-primary font-bold">{deck?.name || '...'}</span> {isFlipped ? '(Flipped)' : ''} {shouldRandomize ? '(Randomized)' : ''}
+                    Playing: <span className="text-primary font-bold">{deck?.name || '...'}</span> {isFlipped ? '(Flipped)' : ''}
                 </h1>
-                <Link href={`/deck/${deckId}/edit`} passHref legacyBehavior>
-                    <Button as="a" variant="default" size="sm" className="whitespace-nowrap">Edit Deck</Button>
+                <Link href={`/deck/${deckId}/overview`} passHref legacyBehavior>
+                    <Button as="a" variant="default" size="sm" className="whitespace-nowrap">Deck Overview</Button>
                 </Link>
             </div>
             <hr className="border-gray-300" />

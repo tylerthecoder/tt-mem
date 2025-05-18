@@ -205,12 +205,13 @@ export default function HomePage() {
                             key={deck.id}
                             className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 sm:p-5 bg-white rounded-lg shadow-md border border-gray-200 hover:shadow-lg transition-shadow duration-150"
                         >
-                            <Link href={`/deck/${deck.id}/overview`} className="font-medium text-lg text-primary hover:underline break-words flex-grow">
+                            <span className="font-medium text-lg text-gray-800 break-words flex-grow mr-4">
                                 {deck.name}
-                            </Link>
+                            </span>
                             <div className="flex flex-shrink-0 flex-wrap gap-2 mt-2 sm:mt-0 self-end sm:self-center">
-                                <Link href={`/deck/${deck.id}/play`} passHref legacyBehavior><Button as="a" variant="default" size="sm">Play</Button></Link>
-                                <Link href={`/deck/${deck.id}/edit`} passHref legacyBehavior><Button as="a" variant="default" size="sm">Edit</Button></Link>
+                                <Link href={`/deck/${deck.id}/overview`} passHref legacyBehavior>
+                                    <Button as="a" variant="default" size="sm">Open</Button>
+                                </Link>
                                 <Button
                                     onClick={() => handleDeleteDeck(deck.id)}
                                     variant="primary"

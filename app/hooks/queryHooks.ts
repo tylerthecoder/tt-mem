@@ -608,16 +608,15 @@ interface ApplyAIEditsData {
 // Mutation hook for getting AI edit suggestions
 export const useGetAIEditSuggestionsMutation = () => {
     return useMutation<
-        AIEditSuggestionsData, // Returns the suggestions array wrapped
+        // Update TData to match the full action result, not just AIEditSuggestionsData
+        { success: boolean; suggestions?: AICardEditSuggestion[]; message?: string },
         Error,
-        { deckId: string; userPrompt: string; token: string | undefined | null } // Takes deckId, prompt, token
+        { deckId: string; userPrompt: string; token: string | undefined | null }
     >({
         mutationFn: async ({ deckId, userPrompt, token }) => {
             const result = await getAIEditSuggestionsAction(deckId, userPrompt, token ?? undefined);
-            if (!result.success || typeof result.suggestions === 'undefined') {
-                throw new Error(result.message || 'Failed to get AI edit suggestions.');
-            }
-            return { suggestions: result.suggestions };
+            // Return the whole result from the action
+            return result;
         },
         onError: (error) => {
             console.error("Get AI Edit Suggestions Mutation Error:", error);
