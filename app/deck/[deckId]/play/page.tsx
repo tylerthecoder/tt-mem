@@ -49,7 +49,7 @@ export default function PlayDeckPage() {
     const missedCardsQuery = useMissedCardsForDeckInTimeframe({
         deckId,
         timeframeDays: timeframeDaysParsed,
-        token,
+        token: token ?? undefined,
         enabled: playStrategy === 'missedInTimeframe' && !!deckId && !!timeframeDaysParsed && timeframeDaysParsed > 0 && !!token,
     });
 

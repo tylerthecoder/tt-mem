@@ -1,0 +1,82 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Card and Review Event Management
+
+This rule details the server actions for managing cards and review events, primarily located in `[app/actions/cards.ts](mdc:app/actions/cards.ts)`, and their associated data structures defined in `[app/types.ts](mdc:app/types.ts)`.
+
+## Core Card Operations
+
+- **Creation**: `createCardAction` adds a new card to a specified deck.
+    - Input: `deckId`, `frontText`, `backText`, `token`.
+    - Output: `CreateCardResult` with the created `Card`.
+- **Fetching Single Card**: `getCardAction` retrieves a specific card by its ID.
+    - Input: `cardId`, `token`.
+    - Output: `FetchCardResult` with the `Card`.
+- **Fetching Deck Cards**: `fetchDeckCardsAction` retrieves all cards belonging to a specific deck.
+    - Input: `deckId`.
+    - Output: `FetchCardsResult` with an array of `Card`s.
+- **Updating**: `updateCardAction` modifies the front or back text of an existing card.
+    - Input: `cardId`, `deckId`, `frontText?`, `backText?`, `token`.
+    - Output: `UpdateCardResult` with the updated `Card`.
+- **Deletion**: `deleteCardAction` removes a card and its associated review events.
+    - Input: `cardId`, `deckId`, `token`.
+    - Output: `DeleteCardResult`.
+
+## Card Review and Retrieval
+
+- **Fetching Cards for Review**: `getCardsForReviewAction` retrieves cards for a review session.
+    - Supports fetching from specific deck(s) or all decks.
+    - Strategies: `random`, `missedFirst`.
+    - Input: `GetCardsForReviewParams` (token, deckId?, deckIds?, limit, strategy).
+    - Output: `FetchReviewCardsResult` with an array of `Card`s.
+- **Fetching Missed Cards**: `getMissedCardsForDeckInTimeframeAction` retrieves cards from a specific deck that were marked "MISSED" within a given timeframe.
+    - Input: `token`, `deckId`, `timeframeDays`.
+    - Output: `FetchMissedCardsResult` with an array of `Card`s.
+    - Logic: Fetches all card IDs for the deck, then queries `review_events` for "MISSED" events associated with those card IDs within the timeframe.
+
+## Review Event Logging
+
+- **Creating Review Event**: `createReviewEventAction` records the result of a card review.
+    - Input: `cardId`, `deckId`, `result` (enum `ReviewResult`).
+    - Output: `CreateReviewEventResult` with the ID of the new review event.
+
+## Data Structures (`[app/types.ts](mdc:app/types.ts)`)
+
+- **`Card`**: Client-facing card structure with `id: string`.
+    ```typescript
+    export interface Card {
+        id: string;
+        deck_id: string;
+        front_text: string;
+        back_text: string;
+        createdAt?: Date;
+        updatedAt?: Date;
+    }
+    ```
+- **`CardDocument`**: MongoDB structure for cards with `_id: ObjectId` and `deck_id: ObjectId`.
+- **`ReviewResult`**: Enum for review outcomes (`EASY`, `MEDIUM`, `HARD`, `MISSED`).
+    ```typescript
+    export enum ReviewResult {
+        EASY = "easy",
+        MEDIUM = "medium",
+        HARD = "hard",
+        MISSED = "missed",
+    }
+    ```
+- **`ReviewEvent`**: Client-facing review event structure with `id: string`.
+    ```typescript
+    export interface ReviewEvent {
+        id: string;
+        card_id: string;
+        result: ReviewResult;
+        timestamp: Date;
+    }
+    ```
+- **`ReviewEventDocument`**: MongoDB structure for review events with `_id: ObjectId` and `card_id: ObjectId`.
+
+## Helper Functions
+
+- `mapCardDocument` (in `[app/actions/cards.ts](mdc:app/actions/cards.ts)`): Converts `CardDocument` (from MongoDB) to `Card` (client-facing), mapping `_id` to `id` and `deck_id` to a string.

@@ -1,0 +1,54 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# AI-Assisted Features
+
+This project incorporates AI to assist with deck and card creation/management.
+
+## AI Deck Generation
+
+- **Entry Point (UI)**: The page at `[app/deck/ai-generate/page.tsx](mdc:app/deck/ai-generate/page.tsx)` allows users to input a topic and generate a new deck with AI-suggested cards.
+- **Server Action**: The `createDeckWithAICardsAction` (expected in `app/actions/aiDecks.ts` or similar) handles the backend logic.
+    - It takes a topic from the user.
+    - Interacts with an AI service to generate card content (front/back text).
+    - Creates a new deck and populates it with the generated cards.
+- **Relevant Types**:
+    - `QuestionAnswerPair` from `[app/types.ts](mdc:app/types.ts)` might be used for the AI-generated card content.
+
+## AI Card Editing (within a Deck)
+
+- **Context**: On the deck overview page (`[app/deck/[deckId]/overview/page.tsx](mdc:app/deck/[deckId]/overview/page.tsx)`), users can initiate AI-assisted editing for the cards within that deck.
+- **Components**:
+    - `AIEditPromptModal`: A modal component that likely takes user input or a prompt to guide the AI in suggesting card edits.
+    - `AIEditReviewList`: A component to display the AI's suggestions for card modifications (creations, updates, deletions) and allow the user to accept or reject them.
+- **Server Actions**: (Specific actions for applying these AI edits are not detailed but would reside in server actions, possibly in `[app/actions/cards.ts](mdc:app/actions/cards.ts)` or a dedicated AI actions file.)
+- **Suggestion Types** (from `[app/types.ts](mdc:app/types.ts)`): These types define the structure of AI suggestions for modifying cards.
+    - `AICreateCardSuggestion`: Suggests creating a new card.
+        ```typescript
+        export interface AICreateCardSuggestion {
+            type: 'create';
+            front_text: string;
+            back_text: string;
+            extra_context?: string;
+        }
+        ```
+    - `AIUpdateCardSuggestion`: Suggests updating an existing card.
+        ```typescript
+        export interface AIUpdateCardSuggestion {
+            type: 'update';
+            cardId: string;
+            front_text?: string;
+            back_text?: string;
+            extra_context?: string;
+        }
+        ```
+    - `AIDeleteCardSuggestion`: Suggests deleting an existing card.
+        ```typescript
+        export interface AIDeleteCardSuggestion {
+            type: 'delete';
+            cardId: string;
+        }
+        ```
+    - `AICardEditSuggestion`: A union type encompassing the above suggestions.

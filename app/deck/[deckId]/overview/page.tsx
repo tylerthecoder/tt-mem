@@ -331,10 +331,10 @@ export default function DeckOverviewPage() {
                     <h2 className="text-xl font-semibold text-gray-800">Cards in Deck ({cards ? cards.length : 0})</h2>
                 </div>
 
-                {cardsLoading && (typeof cards === 'undefined' || cards.length === 0) && (
+                {cardsLoading && (typeof cards === 'undefined') && (
                     <div className="text-center text-gray-500 py-4">Loading cards...</div>
                 )}
-                {!cardsLoading && (typeof cards === 'undefined' || cards.length === 0) && (
+                {!cardsLoading && (typeof cards === 'undefined') && (
                     <div className="text-center text-gray-500 py-4">No cards in this deck.</div>
                 )}
 
