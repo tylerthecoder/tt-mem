@@ -315,9 +315,13 @@ export async function getPastReadingResultsAction(): Promise<GetPastReadingResul
         for (const attempt of attempts) {
             const session = await readingSessionsCollection.findOne({ _id: attempt.session_id });
             if (session) {
+                const mappedAttempt = mapMongoId(attempt);
                 results.push({
                     session: mapMongoId(session) as ReadingSession,
-                    attempt: mapMongoId(attempt) as ReadingAttempt,
+                    attempt: {
+                        ...mappedAttempt,
+                        session_id: attempt.session_id.toString(),
+                    } as ReadingAttempt,
                 });
             }
         }
