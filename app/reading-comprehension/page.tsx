@@ -44,7 +44,7 @@ function TopicInput({ onTopicSubmit, isLoading }: TopicInputProps) {
                 <Button 
                     type="submit" 
                     variant="primary" 
-                    size="md" 
+                    size="base" 
                     disabled={isLoading || !topic.trim()}
                     className="w-full"
                 >
@@ -95,7 +95,7 @@ function ReadingView({ session, onReadingComplete }: ReadingViewProps) {
                     Read the passage carefully, then click "Done" when you finish reading. 
                     You'll then answer questions about the passage.
                 </p>
-                <Button variant="primary" size="lg" onClick={handleStart}>
+                <Button variant="primary" size="base" onClick={handleStart}>
                     Start Reading
                 </Button>
             </div>
@@ -124,7 +124,7 @@ function ReadingView({ session, onReadingComplete }: ReadingViewProps) {
             <div className="text-center">
                 <Button 
                     variant="primary" 
-                    size="lg" 
+                    size="base" 
                     onClick={handleDone}
                     disabled={!isReading}
                 >
@@ -281,11 +281,11 @@ function QuestionAnswer({ session, readingTimeMs, onComplete }: QuestionAnswerPr
                 </div>
 
                 <div className="text-center space-x-4">
-                    <Button variant="primary" size="md" onClick={onComplete}>
+                    <Button variant="primary" size="base" onClick={onComplete}>
                         Try Another Topic
                     </Button>
                     <Link href="/" passHref legacyBehavior>
-                        <Button as="a" variant="default" size="md">Back to Home</Button>
+                        <Button as="a" variant="default" size="base">Back to Home</Button>
                     </Link>
                 </div>
             </div>
@@ -321,7 +321,7 @@ function QuestionAnswer({ session, readingTimeMs, onComplete }: QuestionAnswerPr
             <div className="text-center">
                 <Button
                     variant="primary"
-                    size="lg"
+                    size="base"
                     onClick={handleSubmit}
                     disabled={!allAnswered || isSubmitting}
                 >
