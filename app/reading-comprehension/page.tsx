@@ -51,10 +51,17 @@ function TopicInput({ onTopicSubmit, isLoading }: TopicInputProps) {
                     {isLoading ? 'Generating Content...' : 'Generate Reading Content'}
                 </Button>
             </form>
-            <div className="mt-6 text-center">
-                <Link href="/" className="text-primary underline hover:text-red-700">
-                    ← Back to Home
-                </Link>
+            <div className="mt-6 text-center space-y-2">
+                <div>
+                    <Link href="/reading-comprehension/results" className="text-primary underline hover:text-red-700">
+                        View Past Results
+                    </Link>
+                </div>
+                <div>
+                    <Link href="/" className="text-primary underline hover:text-red-700">
+                        ← Back to Home
+                    </Link>
+                </div>
             </div>
         </div>
     );
@@ -284,6 +291,9 @@ function QuestionAnswer({ session, readingTimeMs, onComplete }: QuestionAnswerPr
                     <Button variant="primary" size="base" onClick={onComplete}>
                         Try Another Topic
                     </Button>
+                    <Link href="/reading-comprehension/results" passHref legacyBehavior>
+                        <Button as="a" variant="default" size="base">View All Results</Button>
+                    </Link>
                     <Link href="/" passHref legacyBehavior>
                         <Button as="a" variant="default" size="base">Back to Home</Button>
                     </Link>

@@ -9,6 +9,7 @@ import type {
     ReadingSessionDocument,
     ReadingSession,
     ReadingAttemptDocument,
+    ReadingAttempt,
     ReadingComprehensionQuestion,
 } from '@/types';
 
@@ -280,6 +281,52 @@ export async function updateAnswerScoreAction(
     } catch (error) {
         console.error('[Update Answer Score Action Error]', error);
         const message = error instanceof Error ? error.message : 'Failed to update answer score.';
+        return { success: false, message };
+    }
+}
+
+// --- Action: Get Past Reading Results ---
+
+interface ReadingResult {
+    session: ReadingSession;
+    attempt: ReadingAttempt;
+}
+
+interface GetPastReadingResultsResult {
+    success: boolean;
+    results?: ReadingResult[];
+    message?: string;
+}
+
+export async function getPastReadingResultsAction(): Promise<GetPastReadingResultsResult> {
+    try {
+        const { db } = await connectToDatabase();
+        const readingSessionsCollection = db.collection<ReadingSessionDocument>('reading_sessions');
+        const readingAttemptsCollection = db.collection<ReadingAttemptDocument>('reading_attempts');
+
+        // Get all attempts with their sessions, sorted by most recent first
+        const attempts = await readingAttemptsCollection
+            .find({})
+            .sort({ createdAt: -1 })
+            .toArray();
+
+        const results: ReadingResult[] = [];
+
+        for (const attempt of attempts) {
+            const session = await readingSessionsCollection.findOne({ _id: attempt.session_id });
+            if (session) {
+                results.push({
+                    session: mapMongoId(session) as ReadingSession,
+                    attempt: mapMongoId(attempt) as ReadingAttempt,
+                });
+            }
+        }
+
+        return { success: true, results };
+
+    } catch (error) {
+        console.error('[Get Past Reading Results Action Error]', error);
+        const message = error instanceof Error ? error.message : 'Failed to fetch past reading results.';
         return { success: false, message };
     }
 }
