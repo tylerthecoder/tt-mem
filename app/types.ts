@@ -150,3 +150,56 @@ export interface AIDeleteCardSuggestion {
 }
 
 export type AICardEditSuggestion = AICreateCardSuggestion | AIUpdateCardSuggestion | AIDeleteCardSuggestion;
+
+// --- Reading Comprehension Types ---
+
+export interface ReadingComprehensionQuestion {
+    question_text: string;
+    correct_answer: string;
+}
+
+export interface ReadingSessionDocument {
+    _id?: ObjectId;
+    topic: string;
+    passage: string;
+    questions: ReadingComprehensionQuestion[];
+    user_id?: string; // Optional for future user association
+    createdAt: Date;
+}
+
+export interface ReadingSession {
+    id: string;
+    topic: string;
+    passage: string;
+    questions: ReadingComprehensionQuestion[];
+    user_id?: string;
+    createdAt: Date;
+}
+
+export interface ReadingAttemptDocument {
+    _id?: ObjectId;
+    session_id: ObjectId;
+    reading_time_ms: number; // Time spent reading the passage
+    answers: {
+        question_index: number;
+        user_answer: string;
+        is_correct: boolean;
+        overridden?: boolean; // User corrected the AI scoring
+    }[];
+    total_score: number; // Calculated score out of total questions
+    createdAt: Date;
+}
+
+export interface ReadingAttempt {
+    id: string;
+    session_id: string;
+    reading_time_ms: number;
+    answers: {
+        question_index: number;
+        user_answer: string;
+        is_correct: boolean;
+        overridden?: boolean;
+    }[];
+    total_score: number;
+    createdAt: Date;
+}
