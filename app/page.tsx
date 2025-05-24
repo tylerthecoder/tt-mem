@@ -187,6 +187,9 @@ export default function HomePage() {
                         <Link href="/quiz" passHref legacyBehavior>
                             <Button as="a" variant="secondary" size="sm" disabled={isLoadingOverall}>AI Quiz Generator</Button>
                         </Link>
+                        <Link href="/reading-comprehension" passHref legacyBehavior>
+                            <Button as="a" variant="secondary" size="sm" disabled={isLoadingOverall}>Reading Comprehension</Button>
+                        </Link>
                     </div>
                 </div>
             )}
