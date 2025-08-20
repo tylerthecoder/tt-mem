@@ -181,6 +181,9 @@ export default function HomePage() {
                         <Link href="/deck/ai-generate" passHref legacyBehavior>
                             <Button as="a" variant="secondary" size="sm" disabled={isLoadingOverall}>Create with AI</Button>
                         </Link>
+                        <Link href="/ai-chat" passHref legacyBehavior>
+                            <Button as="a" variant="secondary" size="sm" disabled={isLoadingOverall}>AI Chat</Button>
+                        </Link>
                         <Link href="/play/select" passHref legacyBehavior>
                             <Button as="a" variant="secondary" size="sm" disabled={isLoadingOverall}>Play Selected Decks</Button>
                         </Link>

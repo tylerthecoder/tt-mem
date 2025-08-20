@@ -203,3 +203,48 @@ export interface ReadingAttempt {
     total_score: number;
     createdAt: Date;
 }
+
+// --- AI Chat Types ---
+
+export interface AIChatToolCall {
+    id: string;
+    name: string;
+    arguments: unknown;
+    approved: boolean;
+    executedAt?: Date;
+    result?: unknown;
+    error?: string;
+}
+
+export interface AIChatMessageDocument {
+    _id?: ObjectId;
+    session_id: ObjectId;
+    role: 'user' | 'assistant' | 'system' | 'tool';
+    content: string; // serialized text or JSON
+    tool_calls?: AIChatToolCall[];
+    createdAt: Date;
+}
+
+export interface AIChatMessage {
+    id: string;
+    role: 'user' | 'assistant' | 'system' | 'tool';
+    content: string;
+    tool_calls?: AIChatToolCall[];
+    createdAt: Date;
+}
+
+export interface AIChatSessionDocument {
+    _id?: ObjectId;
+    user_id?: string;
+    title?: string;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+export interface AIChatSession {
+    id: string;
+    user_id?: string;
+    title?: string;
+    createdAt: Date;
+    updatedAt: Date;
+}

@@ -51,6 +51,16 @@ import {
     type GeneratedCardData
 } from '@/actions/aiDecks';
 import { useAuth } from '@/context/useAuth'; // Added import for useAuth
+// AI Chat actions
+import {
+    createAIChatSessionAction,
+    listAIChatSessionsAction,
+    getAIChatMessagesAction,
+    sendAIChatMessageAction,
+    getPendingToolCallsAction,
+    approveToolCallAction
+} from '@/actions/aiChat';
+import type { AIChatMessage, AIChatSession } from '@/types';
 
 // Remove unused client functions
 // import {
@@ -747,6 +757,98 @@ export const useMissedCardsForDeckInTimeframe = ({
         enabled: !!deckId && !!token && typeof timeframeDays === 'number' && timeframeDays > 0 && enabled,
         staleTime: 0, // Data is likely to change based on new reviews
         gcTime: 5 * 60 * 1000,
+    });
+};
+
+// --- AI Chat Hooks ---
+
+export const useCreateAIChatSessionMutation = () => {
+    const { token } = useAuth();
+    return useMutation<{ id: string }, Error, void>({
+        mutationFn: async () => {
+            const res = await createAIChatSessionAction(token ?? undefined);
+            if (!res.success || !res.session) throw new Error(res.message || 'Failed to create session');
+            return { id: res.session.id };
+        }
+    });
+};
+
+export const useAIChatSessions = () => {
+    const { token } = useAuth();
+    return useQuery<AIChatSession[], Error>({
+        queryKey: ['aiChat', 'sessions'],
+        queryFn: async () => {
+            const res = await listAIChatSessionsAction(token ?? undefined);
+            if (!res.success || !res.sessions) throw new Error(res.message || 'Failed to load sessions');
+            return res.sessions;
+        },
+        enabled: !!token,
+        staleTime: 0,
+    });
+};
+
+export const useAIChatMessages = (sessionId: string | undefined) => {
+    const { token } = useAuth();
+    return useQuery<AIChatMessage[], Error>({
+        queryKey: ['aiChat', 'messages', sessionId],
+        queryFn: async () => {
+            if (!sessionId) throw new Error('Session id required');
+            const res = await getAIChatMessagesAction(sessionId, token ?? undefined);
+            if (!res.success || !res.messages) throw new Error(res.message || 'Failed to load messages');
+            return res.messages;
+        },
+        enabled: !!sessionId && !!token,
+        staleTime: 0,
+    });
+};
+
+export const useSendAIChatMessageMutation = (sessionId: string) => {
+    const queryClient = useQueryClient();
+    const { token } = useAuth();
+    return useMutation<
+        { assistantText?: string; pendingToolCalls?: { id: string; name: string; arguments: unknown }[] },
+        Error,
+        { text: string }
+    >({
+        mutationFn: async ({ text }) => {
+            const res = await sendAIChatMessageAction(sessionId, text, token ?? undefined);
+            if (!res.success) throw new Error(res.message || 'Failed to send');
+            return { assistantText: res.assistantText, pendingToolCalls: res.pendingToolCalls };
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['aiChat', 'messages', sessionId] });
+            queryClient.invalidateQueries({ queryKey: ['aiChat', 'pending', sessionId] });
+        }
+    });
+};
+
+export const usePendingToolCalls = (sessionId: string | undefined) => {
+    const { token } = useAuth();
+    return useQuery<{ id: string; name: string; arguments: unknown }[], Error>({
+        queryKey: ['aiChat', 'pending', sessionId],
+        queryFn: async () => {
+            if (!sessionId) throw new Error('Session id required');
+            const res = await getPendingToolCallsAction(sessionId, token ?? undefined);
+            if (!res.success || !res.toolCalls) throw new Error(res.message || 'Failed to load pending tool calls');
+            return res.toolCalls;
+        },
+        enabled: !!sessionId && !!token,
+        staleTime: 0,
+    });
+};
+
+export const useApproveToolCallMutation = (sessionId: string) => {
+    const queryClient = useQueryClient();
+    const { token } = useAuth();
+    return useMutation<void, Error, { toolCallId: string; approve: boolean }>({
+        mutationFn: async ({ toolCallId, approve }) => {
+            const res = await approveToolCallAction(sessionId, toolCallId, approve, token ?? undefined);
+            if (!res.success) throw new Error(res.message || 'Failed to approve tool');
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['aiChat', 'messages', sessionId] });
+            queryClient.invalidateQueries({ queryKey: ['aiChat', 'pending', sessionId] });
+        }
     });
 };
 

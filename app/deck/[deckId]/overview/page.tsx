@@ -10,7 +10,8 @@ import {
     useApplyAIEditsMutation,
     useUpdateDeckMutation,
     useDeleteCardMutation,
-    useUpdateCardMutation
+    useUpdateCardMutation,
+    useCreateCardMutation
 } from '@/hooks/queryHooks';
 import Button from '@/components/Button';
 import { ReviewResult, type AICardEditSuggestion, type Card } from '@/types';
@@ -53,6 +54,10 @@ export default function DeckOverviewPage() {
     const [editCardFront, setEditCardFront] = useState('');
     const [editCardBack, setEditCardBack] = useState('');
 
+    const [isCreateCardOpen, setIsCreateCardOpen] = useState(false);
+    const [newCardFront, setNewCardFront] = useState('');
+    const [newCardBack, setNewCardBack] = useState('');
+
     const { data: deck, isLoading: deckLoading, error: deckError, refetch: refetchDeckInfo } = useDeck(deckId);
     const { data: history, isLoading: historyLoading, error: historyError } = useDeckReviewHistory(deckId);
     const { data: cards, isLoading: cardsLoading, error: cardsError, refetch: refetchDeckCards } = useDeckCards(deckId);
@@ -62,6 +67,7 @@ export default function DeckOverviewPage() {
     const updateDeckNameMutation = useUpdateDeckMutation();
     const deleteCardMutation = useDeleteCardMutation();
     const updateCardMutation = useUpdateCardMutation();
+    const createCardMutation = useCreateCardMutation();
 
     useEffect(() => {
         if (deck) {
@@ -246,6 +252,14 @@ export default function DeckOverviewPage() {
                     </div>
                 )}
                 <div className="flex flex-col sm:flex-row gap-2 flex-shrink-0 w-full sm:w-auto">
+                    <Button
+                        onClick={() => setIsCreateCardOpen(true)}
+                        variant="primary"
+                        className="w-full sm:w-auto"
+                        disabled={!token}
+                    >
+                        Add Card
+                    </Button>
                     <Button
                         onClick={() => setIsAIPromptModalOpen(true)}
                         variant="secondary"
@@ -453,6 +467,50 @@ export default function DeckOverviewPage() {
                             <Button variant="default" onClick={() => { setEditingCard(null); setEditCardFront(''); setEditCardBack(''); }} disabled={updateCardMutation.isPending}>Cancel</Button>
                             <Button variant="primary" onClick={handleUpdateCard} disabled={updateCardMutation.isPending || !editCardFront.trim() || !editCardBack.trim()}>
                                 {updateCardMutation.isPending ? <Spinner size="sm" /> : 'Save Changes'}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isCreateCardOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center p-4 z-40">
+                    <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg space-y-4">
+                        <h2 className="text-xl font-semibold text-gray-900">Add New Card</h2>
+                        <div>
+                            <label htmlFor="new-card-front" className="block text-sm font-medium text-gray-700 mb-1">Front Text</label>
+                            <textarea id="new-card-front" value={newCardFront} onChange={(e) => setNewCardFront(e.target.value)} rows={3} className="w-full p-2 border border-gray-300 rounded-md" />
+                        </div>
+                        <div>
+                            <label htmlFor="new-card-back" className="block text-sm font-medium text-gray-700 mb-1">Back Text</label>
+                            <textarea id="new-card-back" value={newCardBack} onChange={(e) => setNewCardBack(e.target.value)} rows={3} className="w-full p-2 border border-gray-300 rounded-md" />
+                        </div>
+                        <div className="flex justify-end space-x-2 pt-2">
+                            <Button variant="default" onClick={() => { setIsCreateCardOpen(false); setNewCardFront(''); setNewCardBack(''); }} disabled={createCardMutation.isPending}>Cancel</Button>
+                            <Button
+                                variant="primary"
+                                onClick={() => {
+                                    if (!deckId || !token) return;
+                                    if (!newCardFront.trim() || !newCardBack.trim()) {
+                                        alert('Front and back text cannot be empty.');
+                                        return;
+                                    }
+                                    createCardMutation.mutate({ deckId, frontText: newCardFront.trim(), backText: newCardBack.trim(), token }, {
+                                        onSuccess: () => {
+                                            alert('Card added successfully!');
+                                            setIsCreateCardOpen(false);
+                                            setNewCardFront('');
+                                            setNewCardBack('');
+                                            refetchDeckCards();
+                                        },
+                                        onError: (error) => {
+                                            alert(`Failed to add card: ${error.message}`);
+                                        }
+                                    });
+                                }}
+                                disabled={createCardMutation.isPending || !newCardFront.trim() || !newCardBack.trim()}
+                            >
+                                {createCardMutation.isPending ? <Spinner size="sm" /> : 'Add Card'}
                             </Button>
                         </div>
                     </div>
