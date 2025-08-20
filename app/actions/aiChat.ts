@@ -188,7 +188,13 @@ export async function approveToolCallAction(sessionId: string, toolCallId: strin
             }
             case 'EditCard': {
                 const parsed = EditCardSchema.parse(call.arguments);
-                const res = await updateCardAction({ cardId: parsed.cardId, deckId: parsed.deckId, frontText: parsed.front_text, backText: parsed.back_text, token });
+                const res = await updateCardAction({
+                    cardId: parsed.cardId,
+                    deckId: parsed.deckId,
+                    frontText: parsed.front_text ?? undefined,
+                    backText: parsed.back_text ?? undefined,
+                    token
+                });
                 result = res.success ? res.card : res.message;
                 break;
             }
@@ -196,7 +202,13 @@ export async function approveToolCallAction(sessionId: string, toolCallId: strin
                 const parsed = MultiEditCardSchema.parse(call.arguments);
                 const outcomes: { cardId: string; success: boolean; message?: string }[] = [];
                 for (const edit of parsed.edits) {
-                    const res = await updateCardAction({ cardId: edit.cardId, deckId: parsed.deckId, frontText: edit.front_text, backText: edit.back_text, token });
+                    const res = await updateCardAction({
+                        cardId: edit.cardId,
+                        deckId: parsed.deckId,
+                        frontText: edit.front_text ?? undefined,
+                        backText: edit.back_text ?? undefined,
+                        token
+                    });
                     outcomes.push({ cardId: edit.cardId, success: !!res.success, message: res.message });
                 }
                 result = outcomes;
