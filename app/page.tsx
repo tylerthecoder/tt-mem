@@ -193,6 +193,9 @@ export default function HomePage() {
                         <Link href="/reading-comprehension" passHref legacyBehavior>
                             <Button as="a" variant="secondary" size="sm" disabled={isLoadingOverall}>Reading Comprehension</Button>
                         </Link>
+                        <Link href="/speed-reading" passHref legacyBehavior>
+                            <Button as="a" variant="secondary" size="sm" disabled={isLoadingOverall}>Speed Reading</Button>
+                        </Link>
                     </div>
                 </div>
             )}

@@ -248,3 +248,29 @@ export interface AIChatSession {
     createdAt: Date;
     updatedAt: Date;
 }
+
+// --- Speed Reading Types ---
+
+export interface SpeedReadingAttemptDocument {
+    _id?: ObjectId;
+    text_hash: string;
+    text_excerpt: string; // first 200 chars for reference
+    text_words: number;
+    text_chars: number;
+    wpm: number;
+    duration_ms: number;
+    perceived_comprehension: number; // 1-10
+    createdAt: Date;
+}
+
+export interface SpeedReadingAttempt {
+    id: string;
+    text_hash: string;
+    text_excerpt: string;
+    text_words: number;
+    text_chars: number;
+    wpm: number;
+    duration_ms: number;
+    perceived_comprehension: number;
+    createdAt: Date;
+}
