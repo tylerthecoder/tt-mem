@@ -17,6 +17,7 @@ const apps: AppCard[] = [
     { title: 'AI Quiz', description: 'Generate practice quizzes with AI.', href: '/quiz', icon: '📝' },
     { title: 'Reading Comp', description: 'Read and answer comprehension questions.', href: '/reading-comprehension', icon: '📖' },
     { title: 'Reading Speed', description: 'Practice speed reading and track comprehension.', href: '/speed-reading', icon: '⚡' },
+    { title: 'Interval Training', description: 'Ear training: guess musical intervals.', href: '/interval-training', icon: '🎵' },
 ];
 
 export default function HomePage() {
