@@ -531,6 +531,7 @@ export const useCardsForReview = ({
         },
         enabled: !!token && enabled,
         staleTime: 0,
+        refetchOnWindowFocus: false, // Preserve in-progress play sessions when browser tab focus changes
         gcTime: 5 * 60 * 1000,
     });
 };
@@ -851,4 +852,3 @@ export const useApproveToolCallMutation = (sessionId: string) => {
         }
     });
 };
-
