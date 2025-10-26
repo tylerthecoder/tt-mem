@@ -402,6 +402,7 @@ export default function DeckOverviewPage() {
                                     <tr>
                                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Card Front</th>
                                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Result</th>
+                                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Flipped?</th>
                                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Reviewed</th>
                                     </tr>
                                 </thead>
@@ -410,6 +411,7 @@ export default function DeckOverviewPage() {
                                         <tr key={entry.eventId} className="hover:bg-gray-50">
                                             <td className="px-4 py-3 whitespace-pre-wrap text-sm text-gray-800">{entry.cardFront}</td>
                                             <td className={`px-4 py-3 whitespace-nowrap text-sm font-medium ${getResultColor(entry.result)}`}>{entry.result}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{entry.wasFlipped ? 'Yes' : 'No'}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                                                 {entry.timestamp ? formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true }) : 'N/A'}
                                             </td>

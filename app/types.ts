@@ -31,6 +31,7 @@ export interface ReviewEvent {
     card_id: string;
     result: ReviewResult;
     timestamp: Date; // Use Date
+    wasFlipped?: boolean;
 }
 
 // --- MongoDB Specific Document Types (Optional but helpful) ---
@@ -56,6 +57,7 @@ export interface ReviewEventDocument {
     card_id: ObjectId;
     result: ReviewResult;
     timestamp: Date;
+    was_flipped?: boolean;
 }
 
 // --- Utility/Auth Types ---
@@ -79,6 +81,7 @@ export interface ReviewHistoryEntry {
     cardBack: string;
     result: ReviewResult;
     timestamp: Date;
+    wasFlipped?: boolean;
 }
 
 // --- AI Quiz Types ---

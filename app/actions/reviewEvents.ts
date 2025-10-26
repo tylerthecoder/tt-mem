@@ -109,11 +109,11 @@ export async function getLatestReviewForCardAction(cardId: string): Promise<Late
         // Check if mapping was successful and card_id is ObjectId (it should be)
         if (mappedEvent?.card_id instanceof ObjectId) {
             const finalEvent: ReviewEvent = {
-                ...mappedEvent,
-                id: mappedEvent.id, // mapMongoId already adds string id
+                id: mappedEvent.id,
                 card_id: mappedEvent.card_id.toString(), // Convert ObjectId to string
-                result: mappedEvent.result, // Ensure correct type
-                timestamp: mappedEvent.timestamp, // Ensure correct type
+                result: mappedEvent.result,
+                timestamp: mappedEvent.timestamp,
+                wasFlipped: mappedEvent.was_flipped ?? false,
             };
             return { success: true, reviewEvent: finalEvent };
         } else {

@@ -404,12 +404,13 @@ interface CreateReviewEventInput {
     cardId: string;
     deckId: string; // Might be useful for context/validation
     result: ReviewResult;
+    wasFlipped?: boolean;
     // No token needed if we decide reviews are public/unauthenticated
     // Add token if reviews should be tied to a logged-in user
 }
 
 export async function createReviewEventAction(input: CreateReviewEventInput): Promise<CreateReviewEventResult> {
-    const { cardId, deckId, result } = input;
+    const { cardId, deckId, result, wasFlipped } = input;
 
     // Validate input
     if (!cardId || !ObjectId.isValid(cardId)) {
@@ -436,6 +437,7 @@ export async function createReviewEventAction(input: CreateReviewEventInput): Pr
             card_id: new ObjectId(cardId),
             result: result,
             timestamp: new Date(), // Use server timestamp
+            was_flipped: wasFlipped ?? false,
         };
 
         const dbResult = await reviewsCollection.insertOne(newReviewEventData as ReviewEventDocument);

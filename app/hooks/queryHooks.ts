@@ -390,10 +390,10 @@ export const useCreateReviewEventMutation = () => {
     return useMutation<
         string, // Returns the reviewEventId string
         Error,
-        { cardId: string; deckId: string; result: ReviewResult }
+        { cardId: string; deckId: string; result: ReviewResult; wasFlipped?: boolean }
     >({
-        mutationFn: async ({ cardId, deckId, result }) => {
-            const actionResult = await createReviewEventAction({ cardId, deckId, result });
+        mutationFn: async ({ cardId, deckId, result, wasFlipped }) => {
+            const actionResult = await createReviewEventAction({ cardId, deckId, result, wasFlipped });
             if (!actionResult.success || !actionResult.reviewEventId) {
                 throw new Error(actionResult.message || 'Failed to record review event');
             }

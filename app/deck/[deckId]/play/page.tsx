@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams, useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Button from '@/components/Button';
 import {
@@ -29,10 +29,13 @@ function shuffleArray<T>(array: T[]): T[] {
 export default function PlayDeckPage() {
     const params = useParams();
     const searchParams = useSearchParams();
+    const router = useRouter();
+    const pathname = usePathname();
     const deckId = typeof params?.deckId === 'string' ? params.deckId : undefined;
     const isFlipped = searchParams.get('flipped') === 'true';
     const playStrategy = (searchParams.get('strategy') ?? undefined) === 'missedInTimeframe' ? 'missedInTimeframe' : 'all';
     const timeframeParam = searchParams.get('timeframe') ?? undefined;
+    const cardParamRaw = searchParams.get('card');
 
     let timeframeDaysParsed: number | undefined = undefined;
     if (timeframeParam) {
@@ -41,6 +44,14 @@ export default function PlayDeckPage() {
             timeframeDaysParsed = parsed;
         }
     }
+    const desiredCardIndexFromParam = useMemo(() => {
+        if (!cardParamRaw) return 0;
+        const parsed = parseInt(cardParamRaw, 10);
+        if (isNaN(parsed) || parsed < 1) {
+            return 0;
+        }
+        return parsed - 1;
+    }, [cardParamRaw]);
 
     const { token } = useAuth();
 
@@ -73,12 +84,29 @@ export default function PlayDeckPage() {
         if (cardsToUse && cardsToUse.length > 0) {
             const sequence = shuffleArray(cardsToUse);
             setReviewSequence(sequence);
-            setCurrentCardIndex(0);
         } else if (!isLoadingCards) { // Only reset if not loading and cardsToUse is empty/undefined
             setReviewSequence([]);
             setCurrentCardIndex(0);
         }
     }, [cardsToUse, isLoadingCards]);
+
+    useEffect(() => {
+        if (reviewSequence.length === 0) return;
+        const normalizedIndex = Math.max(0, Math.min(reviewSequence.length - 1, desiredCardIndexFromParam));
+        setCurrentCardIndex(prev => (prev === normalizedIndex ? prev : normalizedIndex));
+    }, [desiredCardIndexFromParam, reviewSequence]);
+
+    useEffect(() => {
+        if (reviewSequence.length === 0) return;
+        const totalCards = reviewSequence.length;
+        const currentCardNumber = Math.min(currentCardIndex + 1, totalCards);
+        const nextCardParam = String(currentCardNumber);
+        if (cardParamRaw === nextCardParam) return;
+
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('card', nextCardParam);
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }, [cardParamRaw, currentCardIndex, reviewSequence.length, router, pathname, searchParams]);
 
     const handleReview = (result: ReviewResult) => {
         if (!reviewSequence || reviewSequence.length === 0 || deckId === undefined || createReviewMutation.isPending) return;
@@ -86,7 +114,7 @@ export default function PlayDeckPage() {
         if (safeIndex >= reviewSequence.length) return;
         const cardId = reviewSequence[safeIndex].id;
 
-        createReviewMutation.mutate({ cardId, deckId, result }, {
+        createReviewMutation.mutate({ cardId, deckId, result, wasFlipped: isFlipped }, {
             onSuccess: () => {
                 const nextIndex = currentCardIndex + 1;
                 setCurrentCardIndex(nextIndex);
@@ -99,6 +127,9 @@ export default function PlayDeckPage() {
 
     const handlePlayAgain = () => {
         if (cardsToUse && cardsToUse.length > 0) {
+            const params = new URLSearchParams(searchParams.toString());
+            params.set('card', '1');
+            router.replace(`${pathname}?${params.toString()}`, { scroll: false });
             const sequence = shuffleArray(cardsToUse);
             setReviewSequence(sequence);
         }
@@ -181,24 +212,25 @@ export default function PlayDeckPage() {
         strategyTitleSegment = `(Missed in last ${timeframeDaysParsed} days) `;
     }
 
+    const totalCards = reviewSequence.length;
+
     return (
         <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
-                <Link href={`/deck/${deckId}/overview`} className="text-sm text-primary hover:underline whitespace-nowrap">
+            <div className="flex flex-col gap-3 sm:grid sm:grid-cols-[auto_1fr_auto] sm:items-center">
+                <Link href={`/deck/${deckId}/overview`} className="text-sm text-primary hover:underline whitespace-nowrap sm:justify-self-start">
                     &larr; Overview
                 </Link>
-                <h1 className="text-lg sm:text-xl font-semibold text-gray-700 text-center order-first sm:order-none">
-                    Playing: <span className="text-primary font-bold">{deck?.name || '...'}</span> {strategyTitleSegment}{isFlipped ? '(Flipped)' : ''}
-                </h1>
-                <Link href={`/deck/${deckId}/overview`} passHref legacyBehavior>
-                    <Button as="a" variant="default" size="sm" className="whitespace-nowrap">Deck Overview</Button>
-                </Link>
+                <div className="text-center space-y-1 sm:justify-self-center">
+                    <h1 className="text-lg sm:text-xl font-semibold text-gray-700">
+                        Playing: <span className="text-primary font-bold">{deck?.name || '...'}</span> {strategyTitleSegment}{isFlipped ? '(Flipped)' : ''}
+                    </h1>
+                    <p className="text-sm font-medium text-gray-500">
+                        Card {Math.min(currentCardIndex + 1, totalCards)} / {totalCards}
+                    </p>
+                </div>
+                <div className="hidden sm:block sm:w-24" aria-hidden="true" />
             </div>
             <hr className="border-gray-300" />
-
-            <p className="text-center text-base font-semibold text-gray-500">
-                Card {currentCardIndex + 1} / {reviewSequence.length}
-            </p>
 
             <CardReviewer
                 card={currentCard}
