@@ -3,72 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Button from '@/components/Button';
-import { useDecks, useImportDeckMutation } from '@/hooks/queryHooks';
+import { useDecks } from '@/hooks/queryHooks';
 import type { Deck } from '@/types';
 import { getRecentlyPlayedDecksAction } from '@/actions/deckInsights';
-import { useAuth } from '@/context/useAuth';
-
-interface ImportDeckModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSubmit: (deckName: string, cardsData: { front: string; back: string }[]) => void;
-  isLoading: boolean;
-}
-
-function ImportDeckModal({ isOpen, onClose, onSubmit, isLoading }: ImportDeckModalProps) {
-  const [deckName, setDeckName] = useState('');
-  const [jsonInput, setJsonInput] = useState('');
-  const [error, setError] = useState<string | null>(null);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    if (!deckName.trim()) { setError('Deck name is required'); return; }
-    let parsed: unknown;
-    try { parsed = JSON.parse(jsonInput); } catch { setError('Invalid JSON'); return; }
-    if (!Array.isArray(parsed)) { setError('JSON must be an array of cards'); return; }
-    const cards = (parsed as any[]).map((c, i) => {
-      if (!c || typeof c.front !== 'string' || typeof c.back !== 'string') {
-        throw new Error(`Card ${i + 1} is missing front/back strings`);
-      }
-      return { front: c.front.trim(), back: c.back.trim() };
-    });
-    onSubmit(deckName.trim(), cards);
-  };
-
-  const close = () => { setDeckName(''); setJsonInput(''); setError(null); onClose(); };
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
-        <h2 className="text-lg font-semibold mb-4">Import Deck</h2>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <label className="text-sm text-gray-700 mb-1 block">Deck Name</label>
-            <input className="w-full border rounded px-3 py-2" value={deckName} onChange={(e) => setDeckName(e.target.value)} disabled={isLoading} />
-          </div>
-          <div>
-            <label className="text-sm text-gray-700 mb-1 block">Cards JSON</label>
-            <textarea className="w-full h-40 border rounded px-3 py-2 font-mono text-sm" value={jsonInput} onChange={(e) => setJsonInput(e.target.value)} disabled={isLoading} />
-            <p className="text-xs text-gray-500 mt-1">[{`{ "front": "Question", "back": "Answer" }`}, ...]</p>
-          </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="default" onClick={close} disabled={isLoading}>Cancel</Button>
-            <Button type="submit" variant="primary" disabled={isLoading || !deckName.trim() || !jsonInput.trim()}>{isLoading ? 'Importing…' : 'Import'}</Button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
 
 export default function DecksHomePage() {
   const { data: decks, isLoading } = useDecks();
-  const importMutation = useImportDeckMutation();
-  const { token } = useAuth();
-  const [modalOpen, setModalOpen] = useState(false);
   const [recents, setRecents] = useState<{ deckId: string; deckName: string; lastPlayedAt: string }[]>([]);
 
   useEffect(() => {
@@ -80,14 +20,6 @@ export default function DecksHomePage() {
     })();
   }, []);
 
-  const handleImport = (deckName: string, cardsData: { front: string; back: string }[]) => {
-    if (!token) return alert('Please login to import decks.');
-    importMutation.mutate({ deckName, cardsData, token }, {
-      onSuccess: () => { setModalOpen(false); },
-      onError: (e) => alert(e.message || 'Import failed'),
-    });
-  };
-
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -96,10 +28,9 @@ export default function DecksHomePage() {
           <Link href="/play/select" passHref legacyBehavior>
             <Button as="a" variant="secondary">Play Selected</Button>
           </Link>
-          <Link href="/deck/ai-generate" passHref legacyBehavior>
-            <Button as="a" variant="secondary">Create with AI</Button>
+          <Link href="/decks/create" passHref legacyBehavior>
+            <Button as="a" variant="primary">Create Deck</Button>
           </Link>
-          <Button variant="primary" onClick={() => setModalOpen(true)}>Import Deck</Button>
         </div>
       </div>
 
@@ -126,7 +57,7 @@ export default function DecksHomePage() {
         <h2 className="text-xl font-semibold mb-3">All Decks</h2>
         {isLoading && <div className="text-gray-500">Loading decks…</div>}
         {!isLoading && decks && decks.length === 0 && (
-          <div className="text-gray-500">No decks yet. Import or create one above.</div>
+          <div className="text-gray-500">No decks yet. Create one to get started.</div>
         )}
         {!isLoading && decks && decks.length > 0 && (
           <ul className="space-y-2">
@@ -147,8 +78,6 @@ export default function DecksHomePage() {
         )}
       </section>
 
-      <ImportDeckModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onSubmit={handleImport} isLoading={importMutation.isPending} />
     </div>
   );
 }
-

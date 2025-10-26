@@ -49,8 +49,8 @@ export async function generateAICardsForNewDeckAction(
     if (!userInstructions || !userInstructions.trim()) {
         return { success: false, message: 'User instructions cannot be empty.' };
     }
-    if (numberOfCards <= 0 || numberOfCards > 20) {
-        return { success: false, message: 'Number of cards must be between 1 and 20.' };
+    if (numberOfCards <= 0 || numberOfCards > 50) {
+        return { success: false, message: 'Number of cards must be between 1 and 50.' };
     }
 
     try {

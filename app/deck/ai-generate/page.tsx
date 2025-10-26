@@ -14,7 +14,7 @@ export default function AIGenerateDeckPage() {
     const { token, isLoading: isLoadingAuth } = useAuth();
 
     const [userInstructions, setUserInstructions] = useState('');
-    const [numberOfCards, setNumberOfCards] = useState<number>(5);
+    const [numberOfCards, setNumberOfCards] = useState<number>(10);
     const [generatedCards, setGeneratedCards] = useState<GeneratedCardData[]>([]);
     const [deckName, setDeckName] = useState('');
 
@@ -40,8 +40,8 @@ export default function AIGenerateDeckPage() {
 
     const handleGenerateCards = async (e: FormEvent) => {
         e.preventDefault();
-        if (!userInstructions.trim() || numberOfCards <= 0) {
-            alert('Please provide instructions and a valid number of cards.');
+        if (!userInstructions.trim() || numberOfCards <= 0 || numberOfCards > 50) {
+            alert('Please provide instructions and choose between 1 and 50 cards.');
             return;
         }
         setGeneratedCards([]);
@@ -132,18 +132,18 @@ export default function AIGenerateDeckPage() {
                     <p className="text-xs text-gray-500 mt-1">Provide detailed instructions or a description of the subject matter for the flashcards.</p>
                 </div>
                 <div>
-                    <label htmlFor="numberOfCards" className="block text-sm font-medium text-gray-600 mb-1">Number of Cards (1-20)</label>
+                    <label htmlFor="numberOfCards" className="block text-sm font-medium text-gray-600 mb-1">Number of Cards (1-50)</label>
                     <input
                         type="number"
                         id="numberOfCards"
                         value={numberOfCards}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => setNumberOfCards(Math.max(1, Math.min(20, parseInt(e.target.value, 10) || 1)))}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => setNumberOfCards(Math.max(1, Math.min(50, parseInt(e.target.value, 10) || 1)))}
                         min="1"
-                        max="20"
+                        max="50"
                         className={inputBaseStyle}
                         required
                     />
-                    <p className="text-xs text-gray-500 mt-1">Max 20 cards. The more specific your instructions, the better the results.</p>
+                    <p className="text-xs text-gray-500 mt-1">Max 50 cards. The more specific your instructions, the better the results.</p>
                 </div>
                 <Button
                     type="submit"
