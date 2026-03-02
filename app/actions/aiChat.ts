@@ -5,7 +5,8 @@ import { connectToDatabase } from '@/lib/db';
 import { mapMongoId } from '@/lib/utils';
 import { verifyAuthToken } from '@/lib/auth';
 import type { AIChatMessage, AIChatMessageDocument, AIChatSession, AIChatSessionDocument, AIChatToolCall } from '@/types';
-import { fetchDeckByIdAction, fetchDecksAction } from '@/actions/decks';
+import { AnswerMode, FrontContentType } from '@/types';
+import { fetchDeckByIdAction, fetchDecksAction, createDeckAction } from '@/actions/decks';
 import { fetchDeckCardsAction, createCardAction, updateCardAction, deleteCardAction } from '@/actions/cards';
 import { z } from 'zod';
 import { Agent, run, tool, user as userItem, assistant as assistantItem, system as systemItem } from '@openai/agents';
@@ -70,27 +71,42 @@ export async function listAIChatSessionsAction(token: string | undefined): Promi
     return { success: true, sessions: mapped };
 }
 
+// Shared optional rich card fields
+const richCardFields = {
+    answer_mode: z.enum(['flip', 'type_in', 'multiple_choice', 'map_select']).optional(),
+    front_content_type: z.enum(['text', 'image', 'map_highlight']).optional(),
+    front_image_url: z.string().optional(),
+    front_map_country_code: z.string().optional(),
+    correct_answer: z.string().optional(),
+    choices: z.array(z.string()).optional(),
+    correct_country_code: z.string().optional(),
+    extra_context: z.string().optional(),
+};
+
 // Schema for tool payloads
 const CardInputSchema = z.object({
     deckId: z.string().min(1),
     front_text: z.string().min(1),
-    back_text: z.string().min(1)
+    back_text: z.string().min(1),
+    ...richCardFields,
 });
 
 const EditCardSchema = z.object({
     deckId: z.string().min(1),
     cardId: z.string().min(1),
     front_text: z.string().optional().nullable(),
-    back_text: z.string().optional().nullable()
-}).refine((v) => !!v.front_text || !!v.back_text, { message: 'At least one of front_text or back_text must be provided' });
+    back_text: z.string().optional().nullable(),
+    ...richCardFields,
+});
 
 const MultiEditCardSchema = z.object({
     deckId: z.string().min(1),
     edits: z.array(z.object({
         cardId: z.string().min(1),
         front_text: z.string().optional().nullable(),
-        back_text: z.string().optional().nullable()
-    }).refine((v) => !!v.front_text || !!v.back_text, { message: 'Each edit must provide front_text or back_text' })).min(1)
+        back_text: z.string().optional().nullable(),
+        ...richCardFields,
+    })).min(1)
 });
 
 const RemoveCardSchema = z.object({
@@ -100,7 +116,11 @@ const RemoveCardSchema = z.object({
 
 const CreateDeckSchema = z.object({
     name: z.string().min(1),
-    cards: z.array(z.object({ front_text: z.string().min(1), back_text: z.string().min(1) }))
+    cards: z.array(z.object({
+        front_text: z.string().min(1),
+        back_text: z.string().min(1),
+        ...richCardFields,
+    }))
 });
 
 const ViewDeckSchema = z.object({
@@ -174,15 +194,48 @@ export async function approveToolCallAction(sessionId: string, toolCallId: strin
         switch (call.name) {
             case 'CreateDeck': {
                 const parsed = CreateDeckSchema.parse(call.arguments);
-                // Use importDeckAction style to create deck with multiple cards
-                const { importDeckAction } = await import('@/actions/decks');
-                const res = await importDeckAction(parsed.name, parsed.cards.map((c: any) => ({ front: c.front_text, back: c.back_text })), token);
-                result = res.success ? res.deck : res.message;
+                // Create empty deck first, then add cards with rich fields
+                const deckRes = await createDeckAction(parsed.name, token);
+                if (!deckRes.success || !deckRes.deck) {
+                    throw new Error(deckRes.message || 'Failed to create deck');
+                }
+                const createdCards = [];
+                for (const c of parsed.cards) {
+                    const cardRes = await createCardAction({
+                        deckId: deckRes.deck.id,
+                        frontText: c.front_text,
+                        backText: c.back_text,
+                        token,
+                        answerMode: c.answer_mode as AnswerMode | undefined,
+                        frontContentType: c.front_content_type as FrontContentType | undefined,
+                        frontImageUrl: c.front_image_url,
+                        frontMapCountryCode: c.front_map_country_code,
+                        correctAnswer: c.correct_answer,
+                        choices: c.choices,
+                        correctCountryCode: c.correct_country_code,
+                        extraContext: c.extra_context,
+                    });
+                    if (cardRes.success && cardRes.card) createdCards.push(cardRes.card);
+                }
+                result = { deck: deckRes.deck, cardsCreated: createdCards.length };
                 break;
             }
             case 'AddCard': {
                 const parsed = CardInputSchema.parse(call.arguments);
-                const res = await createCardAction({ deckId: parsed.deckId, frontText: parsed.front_text, backText: parsed.back_text, token });
+                const res = await createCardAction({
+                    deckId: parsed.deckId,
+                    frontText: parsed.front_text,
+                    backText: parsed.back_text,
+                    token,
+                    answerMode: parsed.answer_mode as AnswerMode | undefined,
+                    frontContentType: parsed.front_content_type as FrontContentType | undefined,
+                    frontImageUrl: parsed.front_image_url,
+                    frontMapCountryCode: parsed.front_map_country_code,
+                    correctAnswer: parsed.correct_answer,
+                    choices: parsed.choices,
+                    correctCountryCode: parsed.correct_country_code,
+                    extraContext: parsed.extra_context,
+                });
                 result = res.success ? res.card : res.message;
                 break;
             }
@@ -193,7 +246,15 @@ export async function approveToolCallAction(sessionId: string, toolCallId: strin
                     deckId: parsed.deckId,
                     frontText: parsed.front_text ?? undefined,
                     backText: parsed.back_text ?? undefined,
-                    token
+                    token,
+                    answerMode: parsed.answer_mode as AnswerMode | undefined,
+                    frontContentType: parsed.front_content_type as FrontContentType | undefined,
+                    frontImageUrl: parsed.front_image_url,
+                    frontMapCountryCode: parsed.front_map_country_code,
+                    correctAnswer: parsed.correct_answer,
+                    choices: parsed.choices,
+                    correctCountryCode: parsed.correct_country_code,
+                    extraContext: parsed.extra_context,
                 });
                 result = res.success ? res.card : res.message;
                 break;
@@ -207,7 +268,15 @@ export async function approveToolCallAction(sessionId: string, toolCallId: strin
                         deckId: parsed.deckId,
                         frontText: edit.front_text ?? undefined,
                         backText: edit.back_text ?? undefined,
-                        token
+                        token,
+                        answerMode: edit.answer_mode as AnswerMode | undefined,
+                        frontContentType: edit.front_content_type as FrontContentType | undefined,
+                        frontImageUrl: edit.front_image_url,
+                        frontMapCountryCode: edit.front_map_country_code,
+                        correctAnswer: edit.correct_answer,
+                        choices: edit.choices,
+                        correctCountryCode: edit.correct_country_code,
+                        extraContext: edit.extra_context,
                     });
                     outcomes.push({ cardId: edit.cardId, success: !!res.success, message: res.message });
                 }
@@ -246,11 +315,12 @@ export async function sendAIChatMessageAction(sessionId: string, userText: strin
     // Define tools
     const addCardTool = tool({
         name: 'AddCard',
-        description: 'Add a card to a deck with front and back text',
+        description: 'Add a card to a deck. Supports rich card types: flip, type_in, multiple_choice, map_select.',
         parameters: z.object({
             deckId: z.string(),
             front_text: z.string(),
             back_text: z.string(),
+            ...richCardFields,
         }),
         execute: async (args: unknown) => {
             // Create pending approval
@@ -261,12 +331,13 @@ export async function sendAIChatMessageAction(sessionId: string, userText: strin
 
     const editCardTool = tool({
         name: 'EditCard',
-        description: 'Edit a card in a deck',
+        description: 'Edit a card in a deck. Can update text, answer mode, choices, and other rich fields.',
         parameters: z.object({
             deckId: z.string(),
             cardId: z.string(),
             front_text: z.string().optional().nullable(),
             back_text: z.string().optional().nullable(),
+            ...richCardFields,
         }),
         execute: async (args: unknown) => {
             const pendingId = await createPendingToolCall(sessionId, userMessageId, 'EditCard', args);
@@ -276,13 +347,14 @@ export async function sendAIChatMessageAction(sessionId: string, userText: strin
 
     const multiEditCardTool = tool({
         name: 'MultiEditCard',
-        description: 'Apply multiple edits to cards within a deck',
+        description: 'Apply multiple edits to cards within a deck. Each edit can update text and rich card fields.',
         parameters: z.object({
             deckId: z.string(),
             edits: z.array(z.object({
                 cardId: z.string(),
                 front_text: z.string().optional().nullable(),
                 back_text: z.string().optional().nullable(),
+                ...richCardFields,
             }))
         }),
         execute: async (args: unknown) => {
@@ -306,10 +378,14 @@ export async function sendAIChatMessageAction(sessionId: string, userText: strin
 
     const createDeckTool = tool({
         name: 'CreateDeck',
-        description: 'Create a new deck with a list of cards',
+        description: 'Create a new deck with a list of cards. Each card supports rich types: flip, type_in, multiple_choice, map_select with optional front content types.',
         parameters: z.object({
             name: z.string(),
-            cards: z.array(z.object({ front_text: z.string(), back_text: z.string() })),
+            cards: z.array(z.object({
+                front_text: z.string(),
+                back_text: z.string(),
+                ...richCardFields,
+            })),
         }),
         execute: async (args: unknown) => {
             const pendingId = await createPendingToolCall(sessionId, userMessageId, 'CreateDeck', args);
@@ -345,7 +421,24 @@ export async function sendAIChatMessageAction(sessionId: string, userText: strin
 
     const agent = new Agent({
         name: 'Deck Assistant',
-        instructions: 'You are an assistant that helps manage flashcard decks. Use tools to view decks, add/edit/remove cards, and create new decks. For any changes, propose the appropriate tool call. Tool calls other than ViewDeck require user approval and may not execute immediately.',
+        instructions: `You are an assistant that helps manage flashcard decks. You have tools to view, create, edit, and delete decks and cards.
+
+Cards support multiple answer modes:
+- "flip" (default): Simple flip card — front is the question, back is the answer
+- "type_in": User types their answer, which is scored against correct_answer
+- "multiple_choice": User picks from choices, scored against correct_answer
+- "map_select": User clicks a country on a world map, scored against correct_country_code
+
+Cards also support different front content types:
+- "text" (default): Plain text question
+- "image": Shows an image (front_image_url) with front_text as caption
+- "map_highlight": Shows a world map with a highlighted country (front_map_country_code) as the question
+
+When creating geography/country decks, use map_select answer mode with correct_country_code (ISO alpha-2 codes like "US", "FR", "JP") and optionally map_highlight front content with front_map_country_code.
+
+When creating vocabulary or factual knowledge decks, mix type_in and multiple_choice modes. Use extra_context to provide additional learning info shown after answering.
+
+Tool calls that modify data (create, edit, delete) require user approval unless auto-approve is enabled.`,
         tools: [createDeckTool, addCardTool, editCardTool, multiEditCardTool, removeCardTool, viewDeckTool, viewAllDecksTool]
     });
 

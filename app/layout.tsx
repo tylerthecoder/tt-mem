@@ -4,6 +4,7 @@ import Link from "next/link"; // Use Next.js Link
 import "./globals.css";
 import { AppProviders } from "./providers";
 import { useAuth } from './context/useAuth';
+import AIChatWidget from './components/AIChatWidget';
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -57,6 +58,7 @@ export default function RootLayout({
                     <footer className="text-center text-gray-500 py-4 mt-8 border-t border-gray-200">
                         © {new Date().getFullYear()} TT Mem
                     </footer>
+                    <AIChatWidget />
                 </AppProviders>
             </body>
         </html>

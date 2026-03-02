@@ -13,8 +13,7 @@ type AppCard = {
 
 const apps: AppCard[] = [
     { title: 'Decks', description: 'Create, review, and manage flashcards.', href: '/decks', icon: '🗂️' },
-    { title: 'AI Chat', description: 'Ask questions and study with AI.', href: '/ai-chat', icon: '🤖' },
-    { title: 'AI Quiz', description: 'Generate practice quizzes with AI.', href: '/quiz', icon: '📝' },
+{ title: 'AI Quiz', description: 'Generate practice quizzes with AI.', href: '/quiz', icon: '📝' },
     { title: 'Reading Comp', description: 'Read and answer comprehension questions.', href: '/reading-comprehension', icon: '📖' },
     { title: 'Reading Speed', description: 'Practice speed reading and track comprehension.', href: '/speed-reading', icon: '⚡' },
     { title: 'Interval Training', description: 'Ear training: guess musical intervals.', href: '/interval-training', icon: '🎵' },
