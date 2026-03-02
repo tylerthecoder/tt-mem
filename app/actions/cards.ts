@@ -293,7 +293,8 @@ export async function getCardsForReviewAction({
                 $match: {
                     $or: [
                         { latestReviewDetails: { $exists: false } },
-                        { "latestReviewDetails.result": ReviewResult.MISSED }
+                        { "latestReviewDetails.result": ReviewResult.MISSED },
+                        { "latestReviewDetails.is_correct": false }
                     ]
                 }
             },
@@ -552,7 +553,10 @@ export async function getMissedCardsForDeckInTimeframeAction({
         // 2. Find recent missed review events using the card_ids
         const missedReviewEvents = await reviewEventsCollection.find({
             card_id: { $in: cardIdsFromDeck }, // Use card_ids from the deck
-            result: ReviewResult.MISSED,
+            $or: [
+                { result: ReviewResult.MISSED },
+                { is_correct: false }
+            ],
             timestamp: { $gte: targetDate }
         }).project({ card_id: 1 }).toArray(); // Only need card_id to find unique cards
 

@@ -158,8 +158,12 @@ Instructions for your response:
         const validatedSuggestions: AICardEditSuggestion[] = [];
         for (const edit of validationResult.data.edits) {
             if (edit.type === 'update') {
-                if (!edit.front_text && !edit.back_text && !edit.extra_context) {
-                    throw new Error(`Update operation for cardId ${edit.cardId} must include at least one field to change (front_text, back_text, or extra_context).`);
+                if (!edit.front_text && !edit.back_text && !edit.extra_context &&
+                    edit.front_content_type === undefined && edit.front_image_url === undefined &&
+                    edit.front_map_country_code === undefined && edit.answer_mode === undefined &&
+                    edit.correct_answer === undefined && edit.choices === undefined &&
+                    edit.correct_country_code === undefined) {
+                    throw new Error(`Update operation for cardId ${edit.cardId} must include at least one field to change.`);
                 }
             }
             validatedSuggestions.push(edit as AICardEditSuggestion); // Cast after validation

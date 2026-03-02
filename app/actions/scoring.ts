@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 import { getOpenAIClient } from '@/lib/openai';
+import { verifyAuthToken } from '@/lib/auth';
 
 const ScoreResponseSchema = z.object({
     is_correct: z.boolean(),
@@ -18,7 +19,13 @@ interface ScoreAnswerResult {
 export async function scoreAnswerAction(
     userAnswer: string,
     correctAnswer: string,
+    token: string | undefined,
 ): Promise<ScoreAnswerResult> {
+    const authResult = verifyAuthToken(token);
+    if (!authResult) {
+        return { success: false, message: 'Unauthorized.' };
+    }
+
     if (!userAnswer || !userAnswer.trim()) {
         return { success: false, message: 'Answer cannot be empty.' };
     }
