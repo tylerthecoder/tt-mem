@@ -5,6 +5,7 @@ import type { Card } from '@/types';
 import Button from '@/components/Button';
 import Spinner from '@/components/Spinner';
 import { scoreAnswerAction } from '@/actions/scoring';
+import { useAuth } from '@/context/useAuth';
 
 interface TypeInAnswerProps {
     card: Card;
@@ -13,6 +14,7 @@ interface TypeInAnswerProps {
 }
 
 export default function TypeInAnswer({ card, onAnswer, isPending }: TypeInAnswerProps) {
+    const { token } = useAuth();
     const [userInput, setUserInput] = useState('');
     const [isScoring, setIsScoring] = useState(false);
     const [feedback, setFeedback] = useState<{ is_correct: boolean; rationale?: string } | null>(null);
@@ -27,7 +29,7 @@ export default function TypeInAnswer({ card, onAnswer, isPending }: TypeInAnswer
         if (!userInput.trim() || !card.correct_answer) return;
         setIsScoring(true);
         try {
-            const result = await scoreAnswerAction(userInput.trim(), card.correct_answer);
+            const result = await scoreAnswerAction(userInput.trim(), card.correct_answer, token ?? undefined);
             if (result.success && result.is_correct !== undefined) {
                 setFeedback({ is_correct: result.is_correct, rationale: result.rationale });
             } else {
