@@ -4,8 +4,9 @@ import { z } from 'zod';
 import { getOpenAIClient } from '@/lib/openai';
 import { verifyAuthToken } from '@/lib/auth';
 import type { QuestionAnswerPair } from '@/types';
-import { createDeckAction } from './decks'; // Assuming this is the correct path
-import { createCardAction } from './cards'; // Assuming this is the correct path
+import { AnswerMode, FrontContentType } from '@/types';
+import { createDeckAction } from './decks';
+import { createCardAction } from './cards';
 import type { Deck } from '@/types';
 
 // --- Zod Schemas for Validation ---
@@ -14,6 +15,13 @@ const QuestionAnswerPairSchema = z.object({
     front_text: z.string().trim().min(1, 'Question text cannot be empty'),
     back_text: z.string().trim().min(1, 'Answer text cannot be empty'),
     extra_context: z.string().optional(),
+    front_content_type: z.enum(['text', 'image', 'map_highlight']).optional(),
+    front_image_url: z.string().url().optional(),
+    front_map_country_code: z.string().max(2).optional(),
+    answer_mode: z.enum(['flip', 'type_in', 'multiple_choice', 'map_select']).optional(),
+    correct_answer: z.string().optional(),
+    choices: z.array(z.string()).optional(),
+    correct_country_code: z.string().max(2).optional(),
 });
 
 // Dynamic schema for the response based on numberOfCards
@@ -28,6 +36,13 @@ export interface GeneratedCardData {
     front_text: string;
     back_text: string;
     extra_context?: string;
+    front_content_type?: string;
+    front_image_url?: string;
+    front_map_country_code?: string;
+    answer_mode?: string;
+    correct_answer?: string;
+    choices?: string[];
+    correct_country_code?: string;
 }
 
 interface GenerateAICardsResult {
@@ -59,19 +74,34 @@ export async function generateAICardsForNewDeckAction(
         const prompt = `Based on the following instructions, generate exactly ${numberOfCards} distinct flashcard objects:
 "${userInstructions}"
 
-Each flashcard object should represent a key term and its definition or a question with a clear, concise answer.
-- The "front_text" should be the key term or question.
-- The "back_text" should be its clear, concise definition or answer.
-- Include an optional "extra_context" (string - a brief 1-2 sentence explanation or related information for the back_text).
+Each flashcard object should represent a key term/question with its answer. You MUST choose the most appropriate answer_mode for each card:
+
+Available answer modes:
+- "flip" (default): Classic flashcard - user sees front, flips to see back. Best for definitions, concepts.
+- "type_in": User types their answer, which is AI-scored. Set "correct_answer" to the expected answer. Best for vocabulary, factual recall.
+- "multiple_choice": User picks from choices. Set "choices" (array of 4 strings) and "correct_answer". Best for recognition tasks.
+- "map_select": User clicks a country on a map. Set "correct_country_code" (ISO alpha-2, e.g. "FR"). Best for geography.
+
+Available front content types:
+- "text" (default): Just text on the front.
+- "map_highlight": Shows a map with a highlighted country. Set "front_map_country_code" (ISO alpha-2). Good for "identify this country" cards.
+
+Required fields: "front_text", "back_text"
+Optional fields: "extra_context", "answer_mode", "correct_answer", "choices", "correct_country_code", "front_content_type", "front_map_country_code"
+
+Guidelines:
+- Use a MIX of answer modes where appropriate for the topic.
+- For geography topics, use "map_select" and "map_highlight" front content.
+- For vocabulary/language topics, prefer "type_in" and "multiple_choice".
+- For concept/definition topics, "flip" is fine.
+- Always include "extra_context" with a brief 1-2 sentence explanation.
+- For "multiple_choice", provide exactly 4 choices including the correct one.
 
 Output Format:
-Respond with a JSON object containing a single key "cards", which is an array of these flashcard objects.
-Example: {"cards": [{"front_text": "Key Term 1", "back_text": "Definition of Key Term 1", "extra_context": "Additional context for Term 1..."}, ...]}
-
-Focus on creating cards that are suitable for flashcard-style learning (term/definition, question/answer).`;
+{"cards": [{"front_text": "...", "back_text": "...", "answer_mode": "flip", "extra_context": "..."}, ...]}`;
 
         const completion = await openai.chat.completions.create({
-            model: 'gpt-4o',
+            model: 'gpt-5.2',
             messages: [{ role: 'user', content: prompt }],
             response_format: { type: 'json_object' },
             temperature: 0.6,
@@ -153,15 +183,19 @@ export async function createDeckWithAICardsAction(
 
     // 2. Create cards for the new deck
     for (const card of cardsData) {
-        // TODO: createCardAction does not currently support extra_context.
-        // If AICreateCardSuggestion includes extra_context and we want to save it,
-        // createCardAction needs to be updated to accept and store it.
         const cardResult = await createCardAction({
             deckId: newDeckId,
             frontText: card.front_text,
             backText: card.back_text,
-            token
-            // extra_context: card.extra_context, // Uncomment if createCardAction is updated
+            token,
+            extraContext: card.extra_context,
+            frontContentType: card.front_content_type as FrontContentType | undefined,
+            frontImageUrl: card.front_image_url,
+            frontMapCountryCode: card.front_map_country_code,
+            answerMode: card.answer_mode as AnswerMode | undefined,
+            correctAnswer: card.correct_answer,
+            choices: card.choices,
+            correctCountryCode: card.correct_country_code,
         });
 
         if (cardResult.success) {

@@ -68,7 +68,7 @@ Provide the output as a JSON object with a single key "quiz" containing an array
 `;
 
         const completion = await openai.chat.completions.create({
-            model: 'gpt-4o', // Or your preferred generation model
+            model: 'gpt-5.2',
             messages: [{ role: 'user', content: prompt }],
             response_format: { type: 'json_object' }, // Request JSON output
             temperature: 0.5, // Adjust creativity vs factualness
@@ -163,8 +163,7 @@ export async function scoreQuizAnswerAction(
         const correctAnswer = quizSet.questions[questionIndex].answer_text;
 
         // 2. Prompt the LLM for scoring
-        // Using gpt-4o-mini as requested for scoring
-        const scoringModel = 'gpt-4o-mini';
+        const scoringModel = 'gpt-5.2-chat-latest';
         const prompt = `Evaluate if the user's answer is semantically correct compared to the reference answer for a quiz question.
 
 Reference Answer: "${correctAnswer}"

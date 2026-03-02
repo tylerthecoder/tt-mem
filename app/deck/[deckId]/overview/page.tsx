@@ -40,7 +40,6 @@ export default function DeckOverviewPage() {
     const deckId = typeof params?.deckId === 'string' ? params.deckId : undefined;
     const { token } = useAuth();
 
-    const [flipCards, setFlipCards] = useState(false);
     const [playStrategy, setPlayStrategy] = useState<'all' | 'missedInTimeframe'>('all');
     const [timeframeDays, setTimeframeDays] = useState<number>(7);
 
@@ -75,8 +74,6 @@ export default function DeckOverviewPage() {
 
     const handleStartPlaying = () => {
         const queryParams = new URLSearchParams();
-        if (flipCards) queryParams.set('flipped', 'true');
-
         queryParams.set('strategy', playStrategy);
         if (playStrategy === 'missedInTimeframe') {
             if (timeframeDays > 0) {
@@ -340,18 +337,6 @@ export default function DeckOverviewPage() {
                         />
                     </div>
                 )}
-                <div className="flex items-center space-x-3 pt-3">
-                    <input
-                        type="checkbox"
-                        id="flip-cards-checkbox"
-                        checked={flipCards}
-                        onChange={(e) => setFlipCards(e.target.checked)}
-                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary focus:ring-offset-1"
-                    />
-                    <label htmlFor="flip-cards-checkbox" className="text-sm font-medium text-gray-700 select-none">
-                        Flip Cards (Show Back First)
-                    </label>
-                </div>
                 <div className="pt-2">
                     <Button
                         onClick={handleStartPlaying}
@@ -365,7 +350,7 @@ export default function DeckOverviewPage() {
 
             <CardsInDeck
                 cards={cards}
-                isLoading={cardsLoading && (!cards || cards.length === 0)}
+                isLoading={cardsLoading && (!cards || (cards as Card[]).length === 0)}
                 canManageCards={!!token}
                 onCreateCard={handleCreateCard}
                 isCreatingCard={createCardMutation.isPending}
@@ -390,7 +375,8 @@ export default function DeckOverviewPage() {
                                     <tr>
                                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Card Front</th>
                                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Result</th>
-                                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Flipped?</th>
+                                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Correct?</th>
+                                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Mode</th>
                                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">Reviewed</th>
                                     </tr>
                                 </thead>
@@ -398,8 +384,11 @@ export default function DeckOverviewPage() {
                                     {history.map((entry) => (
                                         <tr key={entry.eventId} className="hover:bg-gray-50">
                                             <td className="px-4 py-3 whitespace-pre-wrap text-sm text-gray-800">{entry.cardFront}</td>
-                                            <td className={`px-4 py-3 whitespace-nowrap text-sm font-medium ${getResultColor(entry.result)}`}>{entry.result}</td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{entry.wasFlipped ? 'Yes' : 'No'}</td>
+                                            <td className={`px-4 py-3 whitespace-nowrap text-sm font-medium ${getResultColor(entry.result)}`}>{entry.result ?? '-'}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                {entry.is_correct === true ? <span className="text-green-600 font-medium">Yes</span> : entry.is_correct === false ? <span className="text-red-600 font-medium">No</span> : '-'}
+                                            </td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{entry.answer_mode ?? 'flip'}</td>
                                             <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                                                 {entry.timestamp ? formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true }) : 'N/A'}
                                             </td>

@@ -1,5 +1,27 @@
 import type { ObjectId } from 'mongodb';
 
+// --- Enums ---
+
+export enum AnswerMode {
+    FLIP = 'flip',
+    TYPE_IN = 'type_in',
+    MULTIPLE_CHOICE = 'multiple_choice',
+    MAP_SELECT = 'map_select',
+}
+
+export enum FrontContentType {
+    TEXT = 'text',
+    IMAGE = 'image',
+    MAP_HIGHLIGHT = 'map_highlight',
+}
+
+export enum ReviewResult {
+    EASY = "easy",
+    MEDIUM = "medium",
+    HARD = "hard",
+    MISSED = "missed",
+}
+
 // --- Database/API Interfaces ---
 
 // Represents the data structure *after* mapping from DB (_id -> id)
@@ -15,23 +37,26 @@ export interface Card {
     deck_id: string;
     front_text: string;
     back_text: string;
+    front_content_type?: FrontContentType;
+    front_image_url?: string;
+    front_map_country_code?: string;
+    answer_mode?: AnswerMode;
+    correct_answer?: string;
+    choices?: string[];
+    correct_country_code?: string;
+    extra_context?: string;
     createdAt?: Date;
     updatedAt?: Date;
-}
-
-export enum ReviewResult {
-    EASY = "easy",
-    MEDIUM = "medium",
-    HARD = "hard",
-    MISSED = "missed",
 }
 
 export interface ReviewEvent {
     id: string;
     card_id: string;
-    result: ReviewResult;
-    timestamp: Date; // Use Date
-    wasFlipped?: boolean;
+    result?: ReviewResult;
+    timestamp: Date;
+    is_correct?: boolean;
+    answer_mode?: AnswerMode;
+    user_answer?: string;
 }
 
 // --- MongoDB Specific Document Types (Optional but helpful) ---
@@ -45,9 +70,17 @@ export interface DeckDocument {
 
 export interface CardDocument {
     _id: ObjectId;
-    deck_id: ObjectId; // Store deck ID as ObjectId in DB
+    deck_id: ObjectId;
     front_text: string;
     back_text: string;
+    front_content_type?: FrontContentType;
+    front_image_url?: string;
+    front_map_country_code?: string;
+    answer_mode?: AnswerMode;
+    correct_answer?: string;
+    choices?: string[];
+    correct_country_code?: string;
+    extra_context?: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -55,9 +88,11 @@ export interface CardDocument {
 export interface ReviewEventDocument {
     _id: ObjectId;
     card_id: ObjectId;
-    result: ReviewResult;
+    result?: ReviewResult;
     timestamp: Date;
-    was_flipped?: boolean;
+    is_correct?: boolean;
+    answer_mode?: AnswerMode;
+    user_answer?: string;
 }
 
 // --- Utility/Auth Types ---
@@ -79,9 +114,11 @@ export interface ReviewHistoryEntry {
     cardId: string;
     cardFront: string;
     cardBack: string;
-    result: ReviewResult;
+    result?: ReviewResult;
     timestamp: Date;
-    wasFlipped?: boolean;
+    is_correct?: boolean;
+    answer_mode?: AnswerMode;
+    user_answer?: string;
 }
 
 // --- AI Quiz Types ---
@@ -136,15 +173,29 @@ export interface AICreateCardSuggestion {
     type: 'create';
     front_text: string;
     back_text: string;
-    extra_context?: string; // Consistent with Quiz generation
+    extra_context?: string;
+    front_content_type?: FrontContentType;
+    front_image_url?: string;
+    front_map_country_code?: string;
+    answer_mode?: AnswerMode;
+    correct_answer?: string;
+    choices?: string[];
+    correct_country_code?: string;
 }
 
 export interface AIUpdateCardSuggestion {
     type: 'update';
-    cardId: string;          // ID of the card to update
-    front_text?: string;     // Optional: only provide if changing
-    back_text?: string;      // Optional: only provide if changing
-    extra_context?: string;  // Optional: only provide if changing
+    cardId: string;
+    front_text?: string;
+    back_text?: string;
+    extra_context?: string;
+    front_content_type?: FrontContentType;
+    front_image_url?: string;
+    front_map_country_code?: string;
+    answer_mode?: AnswerMode;
+    correct_answer?: string;
+    choices?: string[];
+    correct_country_code?: string;
 }
 
 export interface AIDeleteCardSuggestion {

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient, useQuery, type UseQueryOptions } from '@tanstack/react-query';
 // Import shared types
 import type { Card, Deck, ReviewHistoryEntry } from '@/types';
-import { ReviewResult } from '@/types';
+import { ReviewResult, AnswerMode } from '@/types';
 // Remove mock imports
 // import { fetchMockDeckCards, fetchMockDecks, mockLogin } from '../data/mock';
 // import { Card, Deck } from '../types'; // Removed problematic import
@@ -385,27 +385,23 @@ export const useDeleteCardMutation = () => {
  * Does not require auth token currently (as per action).
  */
 export const useCreateReviewEventMutation = () => {
-    // No queryClient needed if not invalidating/updating cache
-    // const queryClient = useQueryClient();
     return useMutation<
-        string, // Returns the reviewEventId string
+        string,
         Error,
-        { cardId: string; deckId: string; result: ReviewResult; wasFlipped?: boolean }
+        { cardId: string; deckId: string; result?: ReviewResult; is_correct?: boolean; answer_mode?: AnswerMode; user_answer?: string }
     >({
-        mutationFn: async ({ cardId, deckId, result, wasFlipped }) => {
-            const actionResult = await createReviewEventAction({ cardId, deckId, result, wasFlipped });
+        mutationFn: async ({ cardId, deckId, result, is_correct, answer_mode, user_answer }) => {
+            const actionResult = await createReviewEventAction({ cardId, deckId, result, is_correct, answer_mode, user_answer });
             if (!actionResult.success || !actionResult.reviewEventId) {
                 throw new Error(actionResult.message || 'Failed to record review event');
             }
             return actionResult.reviewEventId;
         },
         onSuccess: (reviewEventId, variables) => {
-            console.log(`Review event ${reviewEventId} created for card ${variables.cardId} in deck ${variables.deckId} with result ${variables.result}`);
-            // No cache invalidation needed here unless review history is displayed
+            console.log(`Review event ${reviewEventId} created for card ${variables.cardId} in deck ${variables.deckId}`);
         },
         onError: (error, variables) => {
             console.error(`Error recording review for card ${variables.cardId}:`, error);
-            // Optionally show user feedback
         }
     });
 };

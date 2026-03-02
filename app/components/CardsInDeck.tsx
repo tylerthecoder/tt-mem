@@ -65,7 +65,7 @@ export default function CardsInDeck({
         if (isLoading) {
             return (
                 <tr>
-                    <td colSpan={3} className="px-4 py-6 text-center text-gray-500">
+                    <td colSpan={4} className="px-4 py-6 text-center text-gray-500">
                         <div className="flex items-center justify-center gap-3">
                             <Spinner size="sm" />
                             <span>Loading cards...</span>
@@ -100,6 +100,7 @@ export default function CardsInDeck({
                             disabled={isCreatingCard}
                         />
                     </td>
+                    <td className="px-4 py-3 align-top text-xs text-gray-400">flip</td>
                     <td className="px-4 py-3 align-top text-sm">
                         <div className="flex flex-wrap gap-2">
                             <Button
@@ -130,7 +131,7 @@ export default function CardsInDeck({
         if (!cards || cards.length === 0) {
             rows.push(
                 <tr key="no-cards">
-                    <td colSpan={3} className="px-4 py-6 text-center text-gray-500">
+                    <td colSpan={4} className="px-4 py-6 text-center text-gray-500">
                         {canManageCards
                             ? 'No cards yet. Add your first card to get started.'
                             : 'No cards in this deck.'}
@@ -143,6 +144,11 @@ export default function CardsInDeck({
                     <tr key={card.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 whitespace-pre-wrap text-sm text-gray-800">{card.front_text}</td>
                         <td className="px-4 py-3 whitespace-pre-wrap text-sm text-gray-800">{card.back_text}</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">
+                            <span className="inline-block px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                                {card.answer_mode ?? 'flip'}
+                            </span>
+                        </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm font-medium space-x-2">
                             <Button onClick={() => onEditCard(card)} variant="default" size="sm" className="!p-1.5">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
@@ -199,6 +205,9 @@ export default function CardsInDeck({
                             </th>
                             <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                                 Back
+                            </th>
+                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                                Mode
                             </th>
                             <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                                 Actions

@@ -163,8 +163,16 @@ export default function AIGenerateDeckPage() {
                     <div className="max-h-96 overflow-y-auto space-y-3 pr-2">
                         {generatedCards.map((card, index) => (
                             <div key={index} className="p-3 border border-gray-300 rounded-md bg-gray-50">
-                                <p className="font-semibold text-gray-700">Q: {card.front_text}</p>
+                                <div className="flex items-center justify-between mb-1">
+                                    <p className="font-semibold text-gray-700">Q: {card.front_text}</p>
+                                    {card.answer_mode && card.answer_mode !== 'flip' && (
+                                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{card.answer_mode}</span>
+                                    )}
+                                </div>
                                 <p className="text-gray-600">A: {card.back_text}</p>
+                                {card.correct_answer && <p className="text-xs text-gray-500 mt-1">Correct: {card.correct_answer}</p>}
+                                {card.choices && card.choices.length > 0 && <p className="text-xs text-gray-500 mt-1">Choices: {card.choices.join(', ')}</p>}
+                                {card.correct_country_code && <p className="text-xs text-gray-500 mt-1">Country: {card.correct_country_code}</p>}
                                 {card.extra_context && <p className="text-xs text-gray-500 mt-1">Context: {card.extra_context}</p>}
                             </div>
                         ))}

@@ -27,7 +27,9 @@ function mapReviewHistoryEntry(eventDoc: ReviewEventDocument, cardMap: Map<strin
         cardBack: cardData.back,
         result: mappedEvent.result,
         timestamp: mappedEvent.timestamp,
-        wasFlipped: mappedEvent.was_flipped ?? false,
+        is_correct: mappedEvent.is_correct,
+        answer_mode: mappedEvent.answer_mode,
+        user_answer: mappedEvent.user_answer,
     };
 }
 

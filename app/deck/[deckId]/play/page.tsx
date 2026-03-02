@@ -11,8 +11,9 @@ import {
     useMissedCardsForDeckInTimeframe
 } from '@/hooks/queryHooks';
 import { useAuth } from '@/context/useAuth';
-import { ReviewResult, Card } from '@/types';
+import { ReviewResult, Card, AnswerMode } from '@/types';
 import CardReviewer from '@/components/CardReviewer';
+import type { AnswerData } from '@/components/answer-modes/AnswerModeDispatcher';
 import Spinner from '@/components/Spinner';
 
 // Helper function to shuffle array
@@ -32,7 +33,6 @@ export default function PlayDeckPage() {
     const router = useRouter();
     const pathname = usePathname();
     const deckId = typeof params?.deckId === 'string' ? params.deckId : undefined;
-    const isFlipped = searchParams.get('flipped') === 'true';
     const playStrategy = (searchParams.get('strategy') ?? undefined) === 'missedInTimeframe' ? 'missedInTimeframe' : 'all';
     const timeframeParam = searchParams.get('timeframe') ?? undefined;
     const cardParamRaw = searchParams.get('card');
@@ -108,16 +108,22 @@ export default function PlayDeckPage() {
         router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     }, [cardParamRaw, currentCardIndex, reviewSequence.length, router, pathname, searchParams]);
 
-    const handleReview = (result: ReviewResult) => {
+    const handleReview = (data: AnswerData) => {
         if (!reviewSequence || reviewSequence.length === 0 || deckId === undefined || createReviewMutation.isPending) return;
         const safeIndex = currentCardIndex;
         if (safeIndex >= reviewSequence.length) return;
-        const cardId = reviewSequence[safeIndex].id;
+        const currentCard = reviewSequence[safeIndex];
 
-        createReviewMutation.mutate({ cardId, deckId, result, wasFlipped: isFlipped }, {
+        createReviewMutation.mutate({
+            cardId: currentCard.id,
+            deckId,
+            result: data.result,
+            is_correct: data.is_correct,
+            answer_mode: currentCard.answer_mode,
+            user_answer: data.user_answer,
+        }, {
             onSuccess: () => {
-                const nextIndex = currentCardIndex + 1;
-                setCurrentCardIndex(nextIndex);
+                setCurrentCardIndex(currentCardIndex + 1);
             },
             onError: (err) => {
                 alert(`Failed to record review: ${err.message}`);
@@ -222,7 +228,7 @@ export default function PlayDeckPage() {
                 </Link>
                 <div className="text-center space-y-1 sm:justify-self-center">
                     <h1 className="text-lg sm:text-xl font-semibold text-gray-700">
-                        Playing: <span className="text-primary font-bold">{deck?.name || '...'}</span> {strategyTitleSegment}{isFlipped ? '(Flipped)' : ''}
+                        Playing: <span className="text-primary font-bold">{deck?.name || '...'}</span> {strategyTitleSegment}
                     </h1>
                     <p className="text-sm font-medium text-gray-500">
                         Card {Math.min(currentCardIndex + 1, totalCards)} / {totalCards}
@@ -234,7 +240,6 @@ export default function PlayDeckPage() {
 
             <CardReviewer
                 card={currentCard}
-                isFlipped={isFlipped}
                 onReview={handleReview}
                 isPendingReview={createReviewMutation.isPending}
                 deckName={deck?.name}

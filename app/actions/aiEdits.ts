@@ -21,6 +21,13 @@ const AICreateCardSchema = z.object({
     front_text: z.string().trim().min(1, "Front text cannot be empty for new card"),
     back_text: z.string().trim().min(1, "Back text cannot be empty for new card"),
     extra_context: z.string().optional(),
+    front_content_type: z.enum(['text', 'image', 'map_highlight']).optional(),
+    front_image_url: z.string().url().optional(),
+    front_map_country_code: z.string().max(2).optional(),
+    answer_mode: z.enum(['flip', 'type_in', 'multiple_choice', 'map_select']).optional(),
+    correct_answer: z.string().optional(),
+    choices: z.array(z.string()).optional(),
+    correct_country_code: z.string().max(2).optional(),
 });
 
 const AIUpdateCardSchema = z.object({
@@ -29,6 +36,13 @@ const AIUpdateCardSchema = z.object({
     front_text: z.string().trim().min(1).optional(),
     back_text: z.string().trim().min(1).optional(),
     extra_context: z.string().optional(),
+    front_content_type: z.enum(['text', 'image', 'map_highlight']).optional(),
+    front_image_url: z.string().url().optional(),
+    front_map_country_code: z.string().max(2).optional(),
+    answer_mode: z.enum(['flip', 'type_in', 'multiple_choice', 'map_select']).optional(),
+    correct_answer: z.string().optional(),
+    choices: z.array(z.string()).optional(),
+    correct_country_code: z.string().max(2).optional(),
 });
 
 const AIDeleteCardSchema = z.object({
@@ -104,18 +118,16 @@ User's request: "${userPrompt}"
 Instructions for your response:
 - Respond with a JSON object containing a single key "edits", which is an array of edit objects.
 - Each edit object must have a "type" field: "create", "update", or "delete".
-- For "create": include "front_text" (string), "back_text" (string), and optionally "extra_context" (string).
-- For "update": include "cardId" (string - ID of the card to change) and AT LEAST ONE of "front_text" (string), "back_text" (string), or "extra_context" (string).
-- For "delete": include "cardId" (string - ID of the card to remove).
+- For "create": include "front_text" (string), "back_text" (string), and optionally: "extra_context", "answer_mode" (one of: "flip", "type_in", "multiple_choice", "map_select"), "correct_answer", "choices" (array of strings for multiple_choice), "correct_country_code" (ISO alpha-2 for map_select), "front_content_type" (one of: "text", "image", "map_highlight"), "front_map_country_code".
+- For "update": include "cardId" (string) and AT LEAST ONE field to change.
+- For "delete": include "cardId" (string).
 - If no edits are needed, return an empty "edits" array: {"edits": []}.
 - Ensure card IDs for updates/deletes are from the provided current card list.
-- If the user asks to add cards, provide 'create' operations.
-- If the user asks to change existing cards, provide 'update' operations with the relevant cardId.
-- If the user asks to remove cards, provide 'delete' operations with the relevant cardId.
+- Use appropriate answer modes: "multiple_choice" for recognition, "type_in" for recall, "map_select" for geography, "flip" for concepts.
 - Be precise. Do not add conversational fluff. Only provide the JSON object.`;
 
         const completion = await openai.chat.completions.create({
-            model: 'gpt-4o', // Or your preferred model
+            model: 'gpt-5.2',
             messages: [{ role: 'system', content: systemPrompt }],
             response_format: { type: 'json_object' },
             temperature: 0.3, // Lower temperature for more predictable edits
@@ -201,22 +213,32 @@ export async function applyAIEditsAction(
                         deckId,
                         frontText: edit.front_text,
                         backText: edit.back_text,
-                        // extra_context is not directly supported by createCardAction, handle if needed
-                        // or update createCardAction to accept it.
-                        // For now, it will be ignored for 'create' via this path.
                         token,
+                        extraContext: edit.extra_context,
+                        answerMode: edit.answer_mode as any,
+                        correctAnswer: edit.correct_answer,
+                        choices: edit.choices,
+                        correctCountryCode: edit.correct_country_code,
+                        frontContentType: edit.front_content_type as any,
+                        frontImageUrl: edit.front_image_url,
+                        frontMapCountryCode: edit.front_map_country_code,
                     });
                     break;
                 case 'update':
-                    // Ensure at least one field is being updated (already validated by getAIEditSuggestionsAction)
                     result = await updateCardAction({
                         cardId: edit.cardId,
-                        deckId, // updateCardAction needs deckId for revalidation context
+                        deckId,
                         frontText: edit.front_text,
                         backText: edit.back_text,
-                        // extra_context is not directly supported by updateCardAction.
-                        // If we want to update it, updateCardAction must be modified.
                         token,
+                        extraContext: edit.extra_context,
+                        answerMode: edit.answer_mode as any,
+                        correctAnswer: edit.correct_answer,
+                        choices: edit.choices,
+                        correctCountryCode: edit.correct_country_code,
+                        frontContentType: edit.front_content_type as any,
+                        frontImageUrl: edit.front_image_url,
+                        frontMapCountryCode: edit.front_map_country_code,
                     });
                     break;
                 case 'delete':

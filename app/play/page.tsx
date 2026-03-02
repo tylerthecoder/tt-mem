@@ -5,8 +5,9 @@ import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Button from '@/components/Button';
 import { useCardsForReview, useCreateReviewEventMutation } from '@/hooks/queryHooks';
-import { ReviewResult, Card } from '@/types';
+import { ReviewResult, Card, AnswerMode } from '@/types';
 import CardReviewer from '@/components/CardReviewer';
+import type { AnswerData } from '@/components/answer-modes/AnswerModeDispatcher';
 import Spinner from '@/components/Spinner';
 import { useAuth } from '@/context/useAuth';
 
@@ -28,8 +29,7 @@ function PlayPageContent() {
 
     const strategyParam = searchParams.get('strategy');
     const limitParam = searchParams.get('limit');
-    const isFlipped = searchParams.get('flipped') === 'true';
-    const deckIdsParam = searchParams.get('deckIds'); // New: get deckIds from URL
+    const deckIdsParam = searchParams.get('deckIds');
     const cardParamRaw = searchParams.get('card');
 
     const strategy = (strategyParam === 'random' || strategyParam === 'missedFirst') ? strategyParam : 'random';
@@ -88,22 +88,23 @@ function PlayPageContent() {
         router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     }, [cardParamRaw, currentCardIndex, reviewSequence.length, router, pathname, searchParams]);
 
-    const handleReview = (result: ReviewResult) => {
+    const handleReview = (data: AnswerData) => {
         if (!reviewSequence || reviewSequence.length === 0 || createReviewMutation.isPending) return;
         const safeIndex = currentCardIndex;
         if (safeIndex >= reviewSequence.length) return;
 
-        const cardId = reviewSequence[safeIndex].id;
-        // deckId for review event: if playing multiple decks, this might be ambiguous.
-        // For now, using the card's actual deck_id. createReviewEventAction might need this.
-        // Or, we decide not to pass deckId if it's a multi-deck session, and the action handles it.
-        // Assuming createReviewEventAction can get deck_id from card_id or doesn't strictly need it if ambiguous.
-        const cardDeckId = reviewSequence[safeIndex].deck_id;
+        const currentCard = reviewSequence[safeIndex];
 
-        createReviewMutation.mutate({ cardId, deckId: cardDeckId, result, wasFlipped: isFlipped }, {
+        createReviewMutation.mutate({
+            cardId: currentCard.id,
+            deckId: currentCard.deck_id,
+            result: data.result,
+            is_correct: data.is_correct,
+            answer_mode: currentCard.answer_mode,
+            user_answer: data.user_answer,
+        }, {
             onSuccess: () => {
-                const nextIndex = currentCardIndex + 1;
-                setCurrentCardIndex(nextIndex);
+                setCurrentCardIndex(currentCardIndex + 1);
             },
             onError: (err) => {
                 alert(`Failed to record review: ${err.message}`);
@@ -199,7 +200,7 @@ function PlayPageContent() {
                 </Link>
                 <div className="text-center space-y-1 sm:justify-self-center">
                     <h1 className="text-lg sm:text-xl font-semibold text-gray-700">
-                        {sessionTitle} {isFlipped ? '(Flipped)' : ''} (Strategy: {strategy})
+                        {sessionTitle} (Strategy: {strategy})
                     </h1>
                     <p className="text-sm font-medium text-gray-500">
                         Card {Math.min(currentCardIndex + 1, totalCards)} / {totalCards}
@@ -211,10 +212,8 @@ function PlayPageContent() {
 
             <CardReviewer
                 card={currentCard}
-                isFlipped={isFlipped}
                 onReview={handleReview}
                 isPendingReview={createReviewMutation.isPending}
-            // deckName might not be relevant if playing from multiple decks
             />
         </div>
     );

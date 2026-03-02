@@ -3,7 +3,7 @@
 import { ObjectId, Filter, Document } from 'mongodb';
 import { revalidatePath } from 'next/cache';
 import type { Card, CardDocument, ReviewEventDocument, DeckDocument } from '@/types';
-import { ReviewResult } from '@/types'; // Import enum value
+import { ReviewResult, AnswerMode, FrontContentType } from '@/types';
 // import jwt from 'jsonwebtoken'; // Removed
 import { connectToDatabase } from '@/lib/db';
 import { verifyAuthToken } from '@/lib/auth'; // Import shared auth function
@@ -41,6 +41,14 @@ interface CreateCardInput {
     frontText: string;
     backText: string;
     token: string | undefined;
+    frontContentType?: FrontContentType;
+    frontImageUrl?: string;
+    frontMapCountryCode?: string;
+    answerMode?: AnswerMode;
+    correctAnswer?: string;
+    choices?: string[];
+    correctCountryCode?: string;
+    extraContext?: string;
 }
 
 export async function createCardAction(input: CreateCardInput): Promise<CreateCardResult> {
@@ -59,9 +67,24 @@ export async function createCardAction(input: CreateCardInput): Promise<CreateCa
         return { success: false, message: 'Back text cannot be empty' };
     }
 
-    // No client variable needed
+    // Validate answer mode specific requirements
+    if (input.answerMode === AnswerMode.MULTIPLE_CHOICE) {
+        if (!input.choices || input.choices.length < 2) {
+            return { success: false, message: 'Multiple choice cards require at least 2 choices' };
+        }
+        if (!input.correctAnswer) {
+            return { success: false, message: 'Multiple choice cards require a correct_answer' };
+        }
+    }
+    if (input.answerMode === AnswerMode.TYPE_IN && !input.correctAnswer) {
+        return { success: false, message: 'Type-in cards require a correct_answer' };
+    }
+    if (input.answerMode === AnswerMode.MAP_SELECT && !input.correctCountryCode) {
+        return { success: false, message: 'Map select cards require a correct_country_code' };
+    }
+
     try {
-        const { db } = await connectToDatabase(); // Use imported function
+        const { db } = await connectToDatabase();
         const cardsCollection = db.collection<CardDocument>('cards');
 
         const newCardData: Omit<CardDocument, '_id'> = {
@@ -71,6 +94,16 @@ export async function createCardAction(input: CreateCardInput): Promise<CreateCa
             createdAt: new Date(),
             updatedAt: new Date(),
         };
+
+        // Add optional rich card fields
+        if (input.frontContentType) newCardData.front_content_type = input.frontContentType;
+        if (input.frontImageUrl) newCardData.front_image_url = input.frontImageUrl;
+        if (input.frontMapCountryCode) newCardData.front_map_country_code = input.frontMapCountryCode;
+        if (input.answerMode) newCardData.answer_mode = input.answerMode;
+        if (input.correctAnswer) newCardData.correct_answer = input.correctAnswer;
+        if (input.choices) newCardData.choices = input.choices;
+        if (input.correctCountryCode) newCardData.correct_country_code = input.correctCountryCode;
+        if (input.extraContext) newCardData.extra_context = input.extraContext;
 
         const result = await cardsCollection.insertOne(newCardData as CardDocument);
 
@@ -291,10 +324,18 @@ interface UpdateCardResult {
 
 interface UpdateCardInput {
     cardId: string;
-    deckId: string; // Needed for revalidation
+    deckId: string;
     frontText?: string;
     backText?: string;
     token: string | undefined;
+    frontContentType?: FrontContentType;
+    frontImageUrl?: string;
+    frontMapCountryCode?: string;
+    answerMode?: AnswerMode;
+    correctAnswer?: string;
+    choices?: string[];
+    correctCountryCode?: string;
+    extraContext?: string;
 }
 
 export async function updateCardAction(input: UpdateCardInput): Promise<UpdateCardResult> {
@@ -306,15 +347,20 @@ export async function updateCardAction(input: UpdateCardInput): Promise<UpdateCa
     if (!cardId || !ObjectId.isValid(cardId) || !deckId || !ObjectId.isValid(deckId)) {
         return { success: false, message: 'Valid Card ID and Deck ID are required' };
     }
-    if ((!frontText || !frontText.trim()) && (!backText || !backText.trim())) {
-        return { success: false, message: 'At least one field (front or back text) must be provided for update' };
-    }
 
-    const updates: Partial<Pick<CardDocument, 'front_text' | 'back_text' | 'updatedAt'>> = {
+    const updates: Partial<CardDocument> & { updatedAt: Date } = {
         updatedAt: new Date(),
     };
     if (frontText && frontText.trim()) updates.front_text = frontText.trim();
     if (backText && backText.trim()) updates.back_text = backText.trim();
+    if (input.frontContentType !== undefined) updates.front_content_type = input.frontContentType;
+    if (input.frontImageUrl !== undefined) updates.front_image_url = input.frontImageUrl;
+    if (input.frontMapCountryCode !== undefined) updates.front_map_country_code = input.frontMapCountryCode;
+    if (input.answerMode !== undefined) updates.answer_mode = input.answerMode;
+    if (input.correctAnswer !== undefined) updates.correct_answer = input.correctAnswer;
+    if (input.choices !== undefined) updates.choices = input.choices;
+    if (input.correctCountryCode !== undefined) updates.correct_country_code = input.correctCountryCode;
+    if (input.extraContext !== undefined) updates.extra_context = input.extraContext;
 
     try {
         const { db } = await connectToDatabase();
@@ -402,43 +448,38 @@ interface CreateReviewEventResult {
 
 interface CreateReviewEventInput {
     cardId: string;
-    deckId: string; // Might be useful for context/validation
-    result: ReviewResult;
-    wasFlipped?: boolean;
-    // No token needed if we decide reviews are public/unauthenticated
-    // Add token if reviews should be tied to a logged-in user
+    deckId: string;
+    result?: ReviewResult;
+    is_correct?: boolean;
+    answer_mode?: AnswerMode;
+    user_answer?: string;
 }
 
 export async function createReviewEventAction(input: CreateReviewEventInput): Promise<CreateReviewEventResult> {
-    const { cardId, deckId, result, wasFlipped } = input;
+    const { cardId, deckId, result } = input;
 
-    // Validate input
     if (!cardId || !ObjectId.isValid(cardId)) {
         return { success: false, message: 'Valid Card ID is required' };
     }
     if (!deckId || !ObjectId.isValid(deckId)) {
-        // Optional: Could fetch card to verify deckId association
         return { success: false, message: 'Valid Deck ID is required' };
     }
-    // Check if result is a valid enum value
-    if (!Object.values(ReviewResult).includes(result)) {
+    if (result !== undefined && !Object.values(ReviewResult).includes(result)) {
         return { success: false, message: 'Invalid review result value' };
     }
 
-    // TODO: Add auth check here if reviews require login
-    // const user = verifyAuthToken(token);
-    // if (!user) return { success: false, message: 'Unauthorized' };
-
     try {
         const { db } = await connectToDatabase();
-        const reviewsCollection = db.collection<ReviewEventDocument>('review_events'); // Use a separate collection
+        const reviewsCollection = db.collection<ReviewEventDocument>('review_events');
 
         const newReviewEventData: Omit<ReviewEventDocument, '_id'> = {
             card_id: new ObjectId(cardId),
-            result: result,
-            timestamp: new Date(), // Use server timestamp
-            was_flipped: wasFlipped ?? false,
+            timestamp: new Date(),
         };
+        if (result !== undefined) newReviewEventData.result = result;
+        if (input.is_correct !== undefined) newReviewEventData.is_correct = input.is_correct;
+        if (input.answer_mode) newReviewEventData.answer_mode = input.answer_mode;
+        if (input.user_answer) newReviewEventData.user_answer = input.user_answer;
 
         const dbResult = await reviewsCollection.insertOne(newReviewEventData as ReviewEventDocument);
 
