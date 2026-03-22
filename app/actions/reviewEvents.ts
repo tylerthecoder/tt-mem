@@ -73,6 +73,51 @@ export async function getLastReviewEventPerCard(deckId: string): Promise<Map<str
     }
 }
 
+// --- Fetch Recent Reviews For a Single Card ---
+
+interface CardReviewHistoryResult {
+    success: boolean;
+    reviews?: ReviewEvent[];
+    message?: string;
+}
+
+export async function getCardReviewHistoryAction(cardId: string, limit = 50): Promise<CardReviewHistoryResult> {
+    if (!cardId || !ObjectId.isValid(cardId)) {
+        return { success: false, message: 'Invalid Card ID' };
+    }
+    try {
+        const { db } = await connectToDatabase();
+        const docs = await db
+            .collection<ReviewEventDocument>('review_events')
+            .find({ card_id: new ObjectId(cardId) })
+            .sort({ timestamp: -1 })
+            .limit(limit)
+            .toArray();
+
+        const reviews: ReviewEvent[] = docs.flatMap((doc) => {
+            const mapped = mapMongoId(doc);
+            if (!mapped) {
+                return [];
+            }
+
+            return [{
+                id: mapped.id,
+                card_id: doc.card_id.toString(),
+                result: mapped.result,
+                timestamp: mapped.timestamp,
+                is_correct: mapped.is_correct,
+                answer_mode: mapped.answer_mode,
+                user_answer: mapped.user_answer,
+            }];
+        });
+
+        return { success: true, reviews };
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to fetch card review history';
+        return { success: false, message };
+    }
+}
+
 // --- Fetch Latest Review For a Single Card ---
 
 interface LatestReviewResult {

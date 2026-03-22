@@ -30,7 +30,8 @@ import {
 import { fetchDeckReviewHistoryAction } from '@/actions/reviews'; // Import the new action
 import {
     getLastReviewEventPerCard,
-    getLatestReviewForCardAction
+    getLatestReviewForCardAction,
+    getCardReviewHistoryAction,
 } from '@/actions/reviewEvents'; // Import the new actions
 import type { ReviewEvent } from '@/types'; // Import ReviewEvent type
 // Import Quiz types and actions
@@ -39,17 +40,6 @@ import {
     scoreQuizAnswerAction
 } from '@/actions/quiz';
 import type { QuizSet, QuestionAnswerPair } from '@/types';
-import { useAuth } from '@/context/useAuth'; // Added import for useAuth
-// AI Chat actions
-import {
-    createAIChatSessionAction,
-    listAIChatSessionsAction,
-    getAIChatMessagesAction,
-    sendAIChatMessageAction,
-    getPendingToolCallsAction,
-    approveToolCallAction
-} from '@/actions/aiChat';
-import type { AIChatMessage, AIChatSession } from '@/types';
 
 // Remove unused client functions
 // import {
@@ -92,12 +82,6 @@ export const reviewKeys = {
     deck: (deckId: string) => [...reviewKeys.all, 'deck', deckId] as const,
     card: (cardId: string) => [...reviewKeys.all, 'card', cardId] as const,
     lastPerCard: (deckId: string) => [...reviewKeys.all, 'lastPerCard', deckId] as const, // New key
-};
-
-export const aiChatKeys = {
-    sessions: ['aiChat', 'sessions'] as const,
-    messages: (sessionId: string | undefined) => ['aiChat', 'messages', sessionId] as const,
-    pending: (sessionId: string | undefined) => ['aiChat', 'pending', sessionId] as const,
 };
 
 /**
@@ -204,6 +188,25 @@ export const useLatestReviewForCard = (cardId: string | undefined) => {
         enabled: !!cardId, // Only run if cardId is provided
         staleTime: 1 * 60 * 1000, // Cache for 1 minute
         gcTime: 5 * 60 * 1000,
+    });
+};
+
+/**
+ * Hook to fetch full review history for a single card.
+ */
+export const useCardReviewHistory = (cardId: string | undefined) => {
+    return useQuery<ReviewEvent[], Error>({
+        queryKey: ['reviews', 'card', cardId ?? 'unknown'],
+        queryFn: async () => {
+            if (!cardId) return [];
+            const result = await getCardReviewHistoryAction(cardId);
+            if (!result.success || !result.reviews) {
+                throw new Error(result.message || 'Failed to fetch card review history');
+            }
+            return result.reviews;
+        },
+        enabled: !!cardId,
+        staleTime: 60 * 1000,
     });
 };
 
@@ -626,103 +629,5 @@ export const useMissedCardsForDeckInTimeframe = ({
         enabled: !!deckId && !!token && typeof timeframeDays === 'number' && timeframeDays > 0 && enabled,
         staleTime: 0, // Data is likely to change based on new reviews
         gcTime: 5 * 60 * 1000,
-    });
-};
-
-// --- AI Chat Hooks ---
-
-export const useCreateAIChatSessionMutation = () => {
-    const queryClient = useQueryClient();
-    const { token } = useAuth();
-    return useMutation<{ id: string }, Error, void>({
-        mutationFn: async () => {
-            const res = await createAIChatSessionAction(token ?? undefined);
-            if (!res.success || !res.session) throw new Error(res.message || 'Failed to create session');
-            return { id: res.session.id };
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: aiChatKeys.sessions });
-        }
-    });
-};
-
-export const useAIChatSessions = () => {
-    const { token } = useAuth();
-    return useQuery<AIChatSession[], Error>({
-        queryKey: aiChatKeys.sessions,
-        queryFn: async () => {
-            const res = await listAIChatSessionsAction(token ?? undefined);
-            if (!res.success || !res.sessions) throw new Error(res.message || 'Failed to load sessions');
-            return res.sessions;
-        },
-        enabled: !!token,
-        staleTime: 0,
-    });
-};
-
-export const useAIChatMessages = (sessionId: string | undefined) => {
-    const { token } = useAuth();
-    return useQuery<AIChatMessage[], Error>({
-        queryKey: aiChatKeys.messages(sessionId),
-        queryFn: async () => {
-            if (!sessionId) throw new Error('Session id required');
-            const res = await getAIChatMessagesAction(sessionId, token ?? undefined);
-            if (!res.success || !res.messages) throw new Error(res.message || 'Failed to load messages');
-            return res.messages;
-        },
-        enabled: !!sessionId && !!token,
-        staleTime: 0,
-    });
-};
-
-export const useSendAIChatMessageMutation = (sessionId: string) => {
-    const queryClient = useQueryClient();
-    const { token } = useAuth();
-    return useMutation<
-        { assistantText?: string; pendingToolCalls?: { id: string; name: string; arguments: unknown }[] },
-        Error,
-        { text: string; pageUrl?: string }
-    >({
-        mutationFn: async ({ text, pageUrl }) => {
-            const res = await sendAIChatMessageAction(sessionId, text, token ?? undefined, pageUrl);
-            if (!res.success) throw new Error(res.message || 'Failed to send');
-            return { assistantText: res.assistantText, pendingToolCalls: res.pendingToolCalls };
-        },
-        onSettled: () => {
-            queryClient.invalidateQueries({ queryKey: aiChatKeys.sessions });
-            queryClient.invalidateQueries({ queryKey: aiChatKeys.messages(sessionId) });
-            queryClient.invalidateQueries({ queryKey: aiChatKeys.pending(sessionId) });
-        }
-    });
-};
-
-export const usePendingToolCalls = (sessionId: string | undefined) => {
-    const { token } = useAuth();
-    return useQuery<{ id: string; name: string; arguments: unknown }[], Error>({
-        queryKey: aiChatKeys.pending(sessionId),
-        queryFn: async () => {
-            if (!sessionId) throw new Error('Session id required');
-            const res = await getPendingToolCallsAction(sessionId, token ?? undefined);
-            if (!res.success || !res.toolCalls) throw new Error(res.message || 'Failed to load pending tool calls');
-            return res.toolCalls;
-        },
-        enabled: !!sessionId && !!token,
-        staleTime: 0,
-    });
-};
-
-export const useApproveToolCallMutation = (sessionId: string) => {
-    const queryClient = useQueryClient();
-    const { token } = useAuth();
-    return useMutation<void, Error, { toolCallId: string; approve: boolean }>({
-        mutationFn: async ({ toolCallId, approve }) => {
-            const res = await approveToolCallAction(sessionId, toolCallId, approve, token ?? undefined);
-            if (!res.success) throw new Error(res.message || 'Failed to approve tool');
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: aiChatKeys.sessions });
-            queryClient.invalidateQueries({ queryKey: aiChatKeys.messages(sessionId) });
-            queryClient.invalidateQueries({ queryKey: aiChatKeys.pending(sessionId) });
-        }
     });
 };

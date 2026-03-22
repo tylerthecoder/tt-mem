@@ -1,16 +1,149 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname } from 'next/navigation';
-import { useAuth } from '@/context/useAuth';
 import {
-    useApproveToolCallMutation,
-    useAIChatMessages,
-    useAIChatSessions,
-    useCreateAIChatSessionMutation,
-    usePendingToolCalls,
-    useSendAIChatMessageMutation,
-} from '@/hooks/queryHooks';
+    approveToolCallAction,
+    createAIChatSessionAction,
+    getAIChatMessagesAction,
+    getPendingToolCallsAction,
+    listAIChatSessionsAction,
+    sendAIChatMessageAction,
+} from '@/agent/chatActions';
+import { useAuth } from '@/context/useAuth';
+import type { AIChatMessage, AIChatSession } from '@/types';
+
+const aiChatKeys = {
+    sessions: ['aiChat', 'sessions'] as const,
+    messages: (sessionId: string | undefined) => ['aiChat', 'messages', sessionId] as const,
+    pending: (sessionId: string | undefined) => ['aiChat', 'pending', sessionId] as const,
+};
+
+function useCreateAIChatSessionMutation() {
+    const queryClient = useQueryClient();
+    const { token } = useAuth();
+
+    return useMutation<{ id: string }, Error, void>({
+        mutationFn: async () => {
+            const res = await createAIChatSessionAction(token ?? undefined);
+            if (!res.success || !res.session) {
+                throw new Error(res.message || 'Failed to create session');
+            }
+
+            return { id: res.session.id };
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: aiChatKeys.sessions });
+        },
+    });
+}
+
+function useAIChatSessions() {
+    const { token } = useAuth();
+
+    return useQuery<AIChatSession[], Error>({
+        queryKey: aiChatKeys.sessions,
+        queryFn: async () => {
+            const res = await listAIChatSessionsAction(token ?? undefined);
+            if (!res.success || !res.sessions) {
+                throw new Error(res.message || 'Failed to load sessions');
+            }
+
+            return res.sessions;
+        },
+        enabled: !!token,
+        staleTime: 0,
+    });
+}
+
+function useAIChatMessages(sessionId: string | undefined) {
+    const { token } = useAuth();
+
+    return useQuery<AIChatMessage[], Error>({
+        queryKey: aiChatKeys.messages(sessionId),
+        queryFn: async () => {
+            if (!sessionId) {
+                throw new Error('Session id required');
+            }
+
+            const res = await getAIChatMessagesAction(sessionId, token ?? undefined);
+            if (!res.success || !res.messages) {
+                throw new Error(res.message || 'Failed to load messages');
+            }
+
+            return res.messages;
+        },
+        enabled: !!sessionId && !!token,
+        staleTime: 0,
+    });
+}
+
+function useSendAIChatMessageMutation(sessionId: string) {
+    const queryClient = useQueryClient();
+    const { token } = useAuth();
+
+    return useMutation<
+        { assistantText?: string; pendingToolCalls?: { id: string; name: string; arguments: unknown }[] },
+        Error,
+        { text: string; pageUrl?: string }
+    >({
+        mutationFn: async ({ text, pageUrl }) => {
+            const res = await sendAIChatMessageAction(sessionId, text, token ?? undefined, pageUrl);
+            if (!res.success) {
+                throw new Error(res.message || 'Failed to send');
+            }
+
+            return { assistantText: res.assistantText, pendingToolCalls: res.pendingToolCalls };
+        },
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: aiChatKeys.sessions });
+            queryClient.invalidateQueries({ queryKey: aiChatKeys.messages(sessionId) });
+            queryClient.invalidateQueries({ queryKey: aiChatKeys.pending(sessionId) });
+        },
+    });
+}
+
+function usePendingToolCalls(sessionId: string | undefined) {
+    const { token } = useAuth();
+
+    return useQuery<{ id: string; name: string; arguments: unknown }[], Error>({
+        queryKey: aiChatKeys.pending(sessionId),
+        queryFn: async () => {
+            if (!sessionId) {
+                throw new Error('Session id required');
+            }
+
+            const res = await getPendingToolCallsAction(sessionId, token ?? undefined);
+            if (!res.success || !res.toolCalls) {
+                throw new Error(res.message || 'Failed to load pending tool calls');
+            }
+
+            return res.toolCalls;
+        },
+        enabled: !!sessionId && !!token,
+        staleTime: 0,
+    });
+}
+
+function useApproveToolCallMutation(sessionId: string) {
+    const queryClient = useQueryClient();
+    const { token } = useAuth();
+
+    return useMutation<void, Error, { toolCallId: string; approve: boolean }>({
+        mutationFn: async ({ toolCallId, approve }) => {
+            const res = await approveToolCallAction(sessionId, toolCallId, approve, token ?? undefined);
+            if (!res.success) {
+                throw new Error(res.message || 'Failed to approve tool');
+            }
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: aiChatKeys.sessions });
+            queryClient.invalidateQueries({ queryKey: aiChatKeys.messages(sessionId) });
+            queryClient.invalidateQueries({ queryKey: aiChatKeys.pending(sessionId) });
+        },
+    });
+}
 
 function formatSessionTime(value: Date | string) {
     return new Date(value).toLocaleString([], {
@@ -151,7 +284,7 @@ const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(na
 const shortcutLabel = isMac ? '⌘K' : 'Ctrl+K';
 
 export default function AIChatWidget() {
-    const { token } = useAuth();
+    const { token, isAuthInitializing } = useAuth();
     const pathname = usePathname();
     const [isOpen, setIsOpen] = useState(false);
     const [sessionId, setSessionId] = useState<string | null>(null);
@@ -164,7 +297,7 @@ export default function AIChatWidget() {
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
     const createSession = useCreateAIChatSessionMutation();
-    const { data: sessions, refetch: refetchSessions } = useAIChatSessions();
+    const { data: sessions, refetch: refetchSessions, isError: sessionsError, isPending: sessionsLoading } = useAIChatSessions();
     const { data: messages } = useAIChatMessages(sessionId || undefined);
     const sendMutation = useSendAIChatMessageMutation(sessionId || '');
     const { data: pending } = usePendingToolCalls(sessionId || undefined);
@@ -187,8 +320,16 @@ export default function AIChatWidget() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
+    const createSessionMutate = createSession.mutate;
+    const createSessionIsPending = createSession.isPending;
+
     useEffect(() => {
-        if (!isOpen || !token || sessionId || createSession.isPending) {
+        if (!isOpen || !token || sessionId || createSessionIsPending) {
+            return;
+        }
+
+        // Wait while the sessions query is still in flight for the first time.
+        if (sessionsLoading) {
             return;
         }
 
@@ -197,15 +338,18 @@ export default function AIChatWidget() {
             return;
         }
 
-        if (sessions && sessions.length === 0) {
-            createSession.mutate(undefined, {
+        // Create a session when the list is empty OR when fetching sessions
+        // failed (sessionsError) — this lets the UI recover from transient
+        // DB/network errors instead of staying stuck on "Starting chat...".
+        if ((sessions && sessions.length === 0) || sessionsError) {
+            createSessionMutate(undefined, {
                 onSuccess: (data) => {
                     setSessionId(data.id);
                     refetchSessions();
                 },
             });
         }
-    }, [createSession, isOpen, refetchSessions, sessionId, sessions, token]);
+    }, [createSessionIsPending, createSessionMutate, isOpen, refetchSessions, sessionId, sessions, sessionsError, sessionsLoading, token]);
 
     useEffect(() => {
         if (!optimisticMessage || !messages?.length) {
@@ -258,7 +402,7 @@ export default function AIChatWidget() {
         setShowSessionPicker(false);
     };
 
-    if (!token) {
+    if (isAuthInitializing || !token) {
         return null;
     }
 
@@ -400,9 +544,30 @@ export default function AIChatWidget() {
 
                         <div className="min-h-0 flex-1 overflow-y-auto bg-white px-4 py-4">
                             <div className="space-y-3">
-                                {!sessionId && (
+                                {!sessionId && !createSession.isError && (
                                     <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
                                         Starting chat...
+                                    </div>
+                                )}
+
+                                {!sessionId && createSession.isError && (
+                                    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-6 text-center text-sm text-red-700">
+                                        <div className="font-medium">Failed to start chat</div>
+                                        <div className="mt-1 text-xs text-red-500">
+                                            {createSession.error?.message || 'Could not connect. Check that the server is running.'}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => createSession.mutate(undefined, {
+                                                onSuccess: (data) => {
+                                                    setSessionId(data.id);
+                                                    refetchSessions();
+                                                },
+                                            })}
+                                            className="mt-3 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+                                        >
+                                            Retry
+                                        </button>
                                     </div>
                                 )}
 
