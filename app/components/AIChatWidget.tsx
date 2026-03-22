@@ -565,33 +565,34 @@ function ToolApprovalCard({
     autoApprove: boolean;
     addToolApprovalResponse: (response: { id: string; approved: boolean; reason?: string }) => void | PromiseLike<void>;
 }) {
-    const [handled, setHandled] = useState(false);
+    const [decision, setDecision] = useState<'accepted' | 'rejected' | 'auto-accepted' | null>(null);
     const autoApprovedRef = useRef(false);
 
     useEffect(() => {
-        if (autoApprove && !handled && !autoApprovedRef.current) {
+        if (autoApprove && !decision && !autoApprovedRef.current) {
             autoApprovedRef.current = true;
             Promise.resolve(addToolApprovalResponse({ id: approvalId, approved: true }))
-                .then(() => setHandled(true))
+                .then(() => setDecision('auto-accepted'))
                 .catch(() => {
                     autoApprovedRef.current = false;
+                    setDecision(null);
                 });
         }
-    }, [addToolApprovalResponse, approvalId, autoApprove, handled]);
+    }, [addToolApprovalResponse, approvalId, autoApprove, decision]);
 
     const handleApprove = () => {
         Promise.resolve(addToolApprovalResponse({ id: approvalId, approved: true }))
-            .then(() => setHandled(true))
+            .then(() => setDecision('accepted'))
             .catch(() => {
-                setHandled(false);
+                setDecision(null);
             });
     };
 
     const handleReject = () => {
         Promise.resolve(addToolApprovalResponse({ id: approvalId, approved: false }))
-            .then(() => setHandled(true))
+            .then(() => setDecision('rejected'))
             .catch(() => {
-                setHandled(false);
+                setDecision(null);
             });
     };
 
@@ -603,9 +604,17 @@ function ToolApprovalCard({
             payload={input}
             mode="input"
         >
-            {handled || autoApprovedRef.current ? (
-                <div className="text-xs font-medium text-green-700">
-                    {autoApprove ? 'Auto-accepted' : 'Accepted'}
+            {decision ? (
+                <div
+                    className={`text-xs font-medium ${
+                        decision === 'rejected' ? 'text-red-700' : 'text-green-700'
+                    }`}
+                >
+                    {decision === 'auto-accepted'
+                        ? 'Auto-accepted'
+                        : decision === 'rejected'
+                            ? 'Rejected'
+                            : 'Accepted'}
                 </div>
             ) : (
                 <div className="flex gap-2">
@@ -949,6 +958,8 @@ export default function AIChatWidget() {
     const [showSessionPicker, setShowSessionPicker] = useState(false);
 
     const createSession = useCreateAIChatSessionMutation();
+    const createSessionMutate = createSession.mutate;
+    const createSessionIsPending = createSession.isPending;
     const queryClient = useQueryClient();
     const {
         data: sessions,
@@ -977,7 +988,7 @@ export default function AIChatWidget() {
     }, []);
 
     useEffect(() => {
-        if (!isOpen || !token || sessionId || createSession.isPending) {
+        if (!isOpen || !token || sessionId || createSessionIsPending) {
             return;
         }
 
@@ -991,14 +1002,14 @@ export default function AIChatWidget() {
         }
 
         if ((sessions && sessions.length === 0) || sessionsError) {
-            createSession.mutate(undefined, {
+            createSessionMutate(undefined, {
                 onSuccess: (data) => {
                     setSessionId(data.id);
                     refetchSessions();
                 },
             });
         }
-    }, [createSession, isOpen, refetchSessions, sessionId, sessions, sessionsError, sessionsLoading, token]);
+    }, [createSessionIsPending, createSessionMutate, isOpen, refetchSessions, sessionId, sessions, sessionsError, sessionsLoading, token]);
 
     const handleNewChat = () => {
         createSession.mutate(undefined, {
