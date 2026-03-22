@@ -463,8 +463,8 @@ export async function createReviewEventAction(input: CreateReviewEventInput): Pr
         };
         if (result !== undefined) newReviewEventData.result = result;
         if (input.is_correct !== undefined) newReviewEventData.is_correct = input.is_correct;
-        if (input.answer_type) newReviewEventData.answer_type = input.answer_type;
-        if (input.user_answer) newReviewEventData.user_answer = input.user_answer;
+        if (input.answer_type !== undefined) newReviewEventData.answer_type = input.answer_type;
+        if (input.user_answer !== undefined) newReviewEventData.user_answer = input.user_answer;
 
         const dbResult = await reviewsCollection.insertOne(newReviewEventData as ReviewEventDocument);
 

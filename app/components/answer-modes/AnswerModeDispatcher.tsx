@@ -28,7 +28,10 @@ export default function AnswerModeDispatcher({ card, onAnswer, isPending }: Answ
             return (
                 <FlipAnswer
                     card={card}
-                    onAnswer={(data) => onAnswer({ result: data.result })}
+                    onAnswer={(data) => onAnswer({
+                        result: data.result,
+                        is_correct: data.result !== ReviewResult.MISSED,
+                    })}
                     isPending={isPending}
                 />
             );
@@ -64,7 +67,10 @@ export default function AnswerModeDispatcher({ card, onAnswer, isPending }: Answ
             return (
                 <FlipAnswer
                     card={card}
-                    onAnswer={(data) => onAnswer({ result: data.result })}
+                    onAnswer={(data) => onAnswer({
+                        result: data.result,
+                        is_correct: data.result !== ReviewResult.MISSED,
+                    })}
                     isPending={isPending}
                 />
             );
