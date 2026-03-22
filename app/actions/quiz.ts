@@ -94,7 +94,7 @@ Provide the output as a JSON object with a single key "quiz" containing an array
 
         const validationResult = QuizSetGenerationResponseSchema.safeParse(parsedContent);
         if (!validationResult.success) {
-            console.error('OpenAI response validation failed:', validationResult.error.errors);
+            console.error('OpenAI response validation failed:', validationResult.error.issues);
             throw new Error('Generated quiz data is not in the expected format.');
         }
 
@@ -197,7 +197,7 @@ Is the user's answer correct? Respond ONLY with a JSON object containing a boole
 
         const validationResult = ScoreResponseSchema.safeParse(parsedScoreData);
         if (!validationResult.success) {
-            console.error('OpenAI scoring response validation failed:', validationResult.error.errors);
+            console.error('OpenAI scoring response validation failed:', validationResult.error.issues);
             throw new Error('Scoring data is not in the expected format.');
         }
 

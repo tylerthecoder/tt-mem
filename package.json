@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@openai/agents": "^0.0.17",
@@ -15,22 +15,26 @@
     "date-fns": "^4.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.8.0",
-    "next": "^15.3.2",
+    "next": "16.2",
     "openai": "^4.97.0",
     "postcss": "^8.5.3",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "react-simple-maps": "^3.0.0",
     "tailwindcss": "^4.1.4",
-    "zod": "^3.24.3"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@eslint/js": "^9",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^20.14.9",
-    "@types/react": "^19.0.10",
-    "@types/react-dom": "^19.0.4",
-    "eslint": "^8",
-    "eslint-config-next": "^15.3.2",
-    "typescript": "^5"
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^9",
+    "eslint-config-next": "16.2",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "globals": "^17.4.0",
+    "typescript": "^5",
+    "typescript-eslint": "^8.57.1"
   }
 }

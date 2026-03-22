@@ -96,7 +96,7 @@ Example format:
 
         const validationResult = ReadingContentResponseSchema.safeParse(parsedContent);
         if (!validationResult.success) {
-            console.error('OpenAI response validation failed:', validationResult.error.errors);
+            console.error('OpenAI response validation failed:', validationResult.error.issues);
             throw new Error('Generated reading content is not in the expected format.');
         }
 
