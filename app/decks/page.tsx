@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Button from '@/components/Button';
+import PageHeader, { PageHeaderActionLink } from '@/components/PageHeader';
 import { useDecks } from '@/hooks/queryHooks';
 import type { Deck } from '@/types';
 import { getRecentlyPlayedDecksAction } from '@/actions/deckInsights';
@@ -22,17 +23,19 @@ export default function DecksHomePage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-gray-800">Decks</h1>
-        <div className="flex gap-2">
-          <Link href="/play/select" passHref legacyBehavior>
-            <Button as="a" variant="secondary">Play Selected</Button>
-          </Link>
-          <Link href="/decks/create" passHref legacyBehavior>
-            <Button as="a" variant="primary">Create Deck</Button>
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        title="Decks"
+        backHref="/"
+        backLabel="Home"
+        actions={
+          <PageHeaderActionLink
+            href="/decks/create"
+            icon={<span aria-hidden="true">+</span>}
+          >
+            Create
+          </PageHeaderActionLink>
+        }
+      />
 
       {recents.length > 0 && (
         <section>

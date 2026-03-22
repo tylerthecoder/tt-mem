@@ -6,6 +6,7 @@ import Button from '@/components/Button';
 import Spinner from '@/components/Spinner';
 import { generateReadingContentAction, submitReadingAttemptAction, updateAnswerScoreAction } from '@/actions/readingComprehension';
 import type { ReadingSession } from '@/types';
+import PageHeader, { PageHeaderActionLink } from '@/components/PageHeader';
 
 interface TopicInputProps {
     onTopicSubmit: (topic: string) => void;
@@ -24,7 +25,6 @@ function TopicInput({ onTopicSubmit, isLoading }: TopicInputProps) {
 
     return (
         <div className="max-w-md mx-auto">
-            <h1 className="text-3xl font-bold text-gray-800 mb-6 text-center">Reading Comprehension Test</h1>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                     <label htmlFor="topic" className="block text-sm font-medium text-gray-700 mb-2">
@@ -93,7 +93,7 @@ function ReadingView({ session, onReadingComplete }: ReadingViewProps) {
     if (!hasStarted) {
         return (
             <div className="max-w-2xl mx-auto text-center">
-                <h1 className="text-3xl font-bold text-gray-800 mb-4">Ready to Read</h1>
+                <h2 className="text-3xl font-bold text-gray-800 mb-4">Ready to Read</h2>
                 <p className="text-gray-600 mb-6">
                     Topic: <span className="font-semibold">{session.topic}</span>
                 </p>
@@ -112,7 +112,7 @@ function ReadingView({ session, onReadingComplete }: ReadingViewProps) {
     return (
         <div className="max-w-4xl mx-auto">
             <div className="mb-6 text-center">
-                <h1 className="text-2xl font-bold text-gray-800">Reading: {session.topic}</h1>
+                <h2 className="text-2xl font-bold text-gray-800">Reading: {session.topic}</h2>
                 {isReading && (
                     <p className="text-primary font-medium mt-2">Timer is running... Read carefully!</p>
                 )}
@@ -377,8 +377,33 @@ export default function ReadingComprehensionPage() {
         setPhase('topic');
     };
 
+    const headerTitle = phase === 'topic'
+        ? 'Reading Comprehension'
+        : phase === 'reading'
+            ? 'Reading Session'
+            : 'Answer Questions';
+
+    const headerDescription = phase === 'topic'
+        ? 'Generate a passage, read it, and answer comprehension questions.'
+        : phase === 'reading'
+            ? 'Read the passage carefully before moving on to the questions.'
+            : 'Answer the questions based on the passage you just read.';
+
     return (
-        <div className="container mx-auto px-4 py-8 min-h-screen">
+        <div className="min-h-screen space-y-8 py-8">
+            <PageHeader
+                title={headerTitle}
+                backHref="/"
+                backLabel="Home"
+                actions={phase === 'topic' ? (
+                    <PageHeaderActionLink
+                        href="/reading-comprehension/results"
+                        icon={<span aria-hidden="true">↗</span>}
+                    >
+                        Past Results
+                    </PageHeaderActionLink>
+                ) : undefined}
+            />
             {phase === 'topic' && (
                 <TopicInput onTopicSubmit={handleTopicSubmit} isLoading={isLoading} />
             )}

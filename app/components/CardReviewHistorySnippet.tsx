@@ -32,31 +32,18 @@ export default function CardReviewHistorySnippet({ cardId }: CardReviewHistorySn
     };
 
     return (
-        // Outer div is just a container now
-        <div className="text-xs text-gray-500">
-            {/* Inner div contains content and styling */}
-            <div className="pt-3 mt-3 border-t border-gray-100">
-                <p className="font-medium mb-1">Last Review:</p>
-                {isLoading && (
-                    <div className="space-y-1">
-                        {/* Keep skeleton lines relatively narrow */}
-                        <SkeletonLine width="w-3/4" height="h-3" />
-                        <SkeletonLine width="w-1/2" height="h-3" />
-                    </div>
-                )}
-                {!isLoading && error && (
-                    <p className="text-red-500">Error loading history: {(error as Error).message}</p>
-                )}
-                {!isLoading && !error && !latestReview && (
-                    <p>No review history found.</p>
-                )}
-                {!isLoading && !error && latestReview && (
-                    <p>
-                        <span className="font-semibold">{formatReviewResult(latestReview.result)}</span>
-                        <span className="ml-2">({formatRelativeTime(latestReview.timestamp)})</span>
-                    </p>
-                )}
-            </div>
+        <div className="border-t border-gray-100 pt-2 flex items-center justify-center gap-1.5 text-xs text-gray-400">
+            <span>Last review:</span>
+            {isLoading && <SkeletonLine width="w-20" height="h-3" />}
+            {!isLoading && error && <span className="text-red-400">unavailable</span>}
+            {!isLoading && !error && !latestReview && <span>none</span>}
+            {!isLoading && !error && latestReview && (
+                <>
+                    <span className="font-medium text-gray-500">{formatReviewResult(latestReview.result)}</span>
+                    <span>·</span>
+                    <span>{formatRelativeTime(latestReview.timestamp)}</span>
+                </>
+            )}
         </div>
     );
 }

@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import Button from '@/components/Button';
 import { submitSpeedReadingAttemptAction } from '@/actions/speedReading';
+import PageHeader from '@/components/PageHeader';
 
 function cleanText(raw: string): string {
     if (!raw) return '';
@@ -116,10 +117,11 @@ export default function SpeedReadingPage() {
 
     return (
         <div className="max-w-4xl mx-auto space-y-6">
-            <div className="flex items-center justify-between">
-                <h1 className="text-3xl font-bold text-gray-800">Speed Reading</h1>
-                <Link href="/" className="text-primary underline hover:text-red-700">Home</Link>
-            </div>
+            <PageHeader
+                title="Speed Reading"
+                backHref="/"
+                backLabel="Home"
+            />
 
             {phase === 'setup' && (
                 <div className="space-y-4">

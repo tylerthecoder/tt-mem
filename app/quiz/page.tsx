@@ -7,6 +7,7 @@ import type { QuizSet } from '@/types';
 import QuizTopicInput from '@/components/QuizTopicInput';
 import QuizPlayer, { type QuizResult } from '@/components/QuizPlayer'; // Import type
 import Button from '@/components/Button';
+import PageHeader from '@/components/PageHeader';
 
 // Enum to manage the page state
 enum QuizPageState {
@@ -46,7 +47,11 @@ export default function AIQuizPage() {
 
     return (
         <div className="space-y-8">
-            <h1 className="text-3xl font-bold text-primary text-center">AI Quiz Generator</h1>
+            <PageHeader
+                title="AI Quiz Generator"
+                backHref="/"
+                backLabel="Home"
+            />
 
             {pageState === QuizPageState.TopicInput && (
                 <QuizTopicInput

@@ -51,51 +51,48 @@ export default function TypeInAnswer({ card, onAnswer, isPending }: TypeInAnswer
     };
 
     return (
-        <div className="space-y-4 pt-4 border-t border-gray-200">
+        <div className="space-y-3 pt-3 border-t border-gray-100">
             {!feedback ? (
-                <div className="space-y-3">
+                <div className="flex gap-2">
                     <input
                         type="text"
                         value={userInput}
                         onChange={(e) => setUserInput(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); }}
                         placeholder="Type your answer..."
-                        className="w-full p-3 border border-gray-300 rounded-lg text-center text-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-center text-base focus:ring-2 focus:ring-primary focus:border-primary"
                         disabled={isScoring}
                         autoFocus
                     />
                     <Button
                         onClick={handleSubmit}
                         variant="secondary"
+                        size="sm"
                         disabled={!userInput.trim() || isScoring}
-                        className="w-full sm:w-auto"
                     >
-                        {isScoring ? <><Spinner size="sm" /> Checking...</> : 'Submit'}
+                        {isScoring ? <><Spinner size="sm" /> </> : 'Submit'}
                     </Button>
                 </div>
             ) : (
-                <div className="space-y-3">
-                    <div className={`p-4 rounded-lg ${feedback.is_correct ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-                        <p className={`text-lg font-semibold ${feedback.is_correct ? 'text-green-700' : 'text-red-700'}`}>
+                <div className="flex items-start justify-between gap-3">
+                    <div className={`flex-1 px-3 py-2 rounded-lg text-left text-sm ${feedback.is_correct ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                        <p className={`font-semibold ${feedback.is_correct ? 'text-green-700' : 'text-red-700'}`}>
                             {feedback.is_correct ? 'Correct!' : 'Incorrect'}
                         </p>
-                        <p className="text-sm text-gray-600 mt-1">
-                            Your answer: <span className="font-medium">{userInput}</span>
-                        </p>
                         {!feedback.is_correct && card.correct_answer && (
-                            <p className="text-sm text-gray-600 mt-1">
-                                Correct answer: <span className="font-medium text-green-700">{card.correct_answer}</span>
+                            <p className="text-xs text-gray-600 mt-0.5">
+                                Answer: <span className="font-medium text-green-700">{card.correct_answer}</span>
                             </p>
                         )}
                         {feedback.rationale && (
-                            <p className="text-xs text-gray-500 mt-2 italic">{feedback.rationale}</p>
+                            <p className="text-xs text-gray-500 mt-1 italic">{feedback.rationale}</p>
+                        )}
+                        {card.extra_context && (
+                            <p className="text-xs text-gray-500 mt-1 italic">{card.extra_context}</p>
                         )}
                     </div>
-                    {card.extra_context && (
-                        <p className="text-sm text-gray-500 italic">{card.extra_context}</p>
-                    )}
-                    <Button onClick={handleContinue} variant="secondary" disabled={isPending}>
-                        {isPending ? 'Recording...' : 'Continue'}
+                    <Button onClick={handleContinue} variant="secondary" size="sm" disabled={isPending}>
+                        {isPending ? 'Saving…' : 'Continue →'}
                     </Button>
                 </div>
             )}

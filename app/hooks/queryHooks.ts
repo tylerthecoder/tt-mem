@@ -39,17 +39,6 @@ import {
     scoreQuizAnswerAction
 } from '@/actions/quiz';
 import type { QuizSet, QuestionAnswerPair } from '@/types';
-// Import AI Deck Edit Actions and types
-import {
-    getAIEditSuggestionsAction,
-    applyAIEditsAction
-} from '@/actions/aiEdits';
-import type { AICardEditSuggestion } from '@/types';
-import {
-    generateAICardsForNewDeckAction,
-    createDeckWithAICardsAction,
-    type GeneratedCardData
-} from '@/actions/aiDecks';
 import { useAuth } from '@/context/useAuth'; // Added import for useAuth
 // AI Chat actions
 import {
@@ -103,6 +92,12 @@ export const reviewKeys = {
     deck: (deckId: string) => [...reviewKeys.all, 'deck', deckId] as const,
     card: (cardId: string) => [...reviewKeys.all, 'card', cardId] as const,
     lastPerCard: (deckId: string) => [...reviewKeys.all, 'lastPerCard', deckId] as const, // New key
+};
+
+export const aiChatKeys = {
+    sessions: ['aiChat', 'sessions'] as const,
+    messages: (sessionId: string | undefined) => ['aiChat', 'messages', sessionId] as const,
+    pending: (sessionId: string | undefined) => ['aiChat', 'pending', sessionId] as const,
 };
 
 /**
@@ -599,129 +594,6 @@ export const useScoreQuizAnswerMutation = () => {
     });
 };
 
-// --- AI Deck Edit Hooks ---
-
-// Type for the result of getAIEditSuggestionsAction (for hook)
-interface AIEditSuggestionsData {
-    suggestions: AICardEditSuggestion[];
-}
-
-// Type for applyAIEditsAction result (for hook)
-interface ApplyAIEditsData {
-    appliedCount: number;
-    failedCount: number;
-    failureDetails?: { edit: AICardEditSuggestion, message: string }[];
-    message: string; // Overall message from the action
-}
-
-// Mutation hook for getting AI edit suggestions
-export const useGetAIEditSuggestionsMutation = () => {
-    return useMutation<
-        // Update TData to match the full action result, not just AIEditSuggestionsData
-        { success: boolean; suggestions?: AICardEditSuggestion[]; message?: string },
-        Error,
-        { deckId: string; userPrompt: string; token: string | undefined | null }
-    >({
-        mutationFn: async ({ deckId, userPrompt, token }) => {
-            const result = await getAIEditSuggestionsAction(deckId, userPrompt, token ?? undefined);
-            // Return the whole result from the action
-            return result;
-        },
-        onError: (error) => {
-            console.error("Get AI Edit Suggestions Mutation Error:", error);
-        },
-    });
-};
-
-// Mutation hook for applying AI edits
-export const useApplyAIEditsMutation = () => {
-    const queryClient = useQueryClient();
-
-    return useMutation<
-        ApplyAIEditsData, // Returns the summary of application
-        Error,
-        { deckId: string; edits: AICardEditSuggestion[]; token: string | undefined | null } // Takes deckId, edits array, token
-    >({
-        mutationFn: async ({ deckId, edits, token }) => {
-            const result = await applyAIEditsAction(deckId, edits, token ?? undefined);
-            // Action already returns success true/false and includes counts/messages
-            if (!result.success && result.failedCount === edits.length && edits.length > 0) {
-                // If all edits failed and there was at least one edit, it's an operational error
-                // but the hook should still resolve with the details from the action.
-                // The action itself forms the error message in this case.
-            }
-            if (!result.success && result.message === 'Unauthorized.') {
-                // Propagate unauthorized specifically if needed, though global handler should also catch it
-                throw new Error(result.message);
-            }
-            // The hook succeeds if the action was called, returning the action's result.
-            // The `success` field within ApplyAIEditsData indicates if all edits were applied without issues.
-            return {
-                appliedCount: result.appliedCount,
-                failedCount: result.failedCount,
-                failureDetails: result.failureDetails,
-                message: result.message || (result.success ? 'Edits applied.' : 'Some edits failed.')
-            };
-        },
-        onSuccess: (data, variables) => {
-            // Invalidate deck cards and deck details to reflect changes
-            queryClient.invalidateQueries({ queryKey: queryKeys.cards.forDeck(variables.deckId) });
-            queryClient.invalidateQueries({ queryKey: queryKeys.decks.detail(variables.deckId) });
-            // Optionally: show a toast or notification based on data.message
-        },
-        onError: (error) => {
-            console.error("Apply AI Edits Mutation Error:", error);
-            // This usually catches network errors or if the mutationFn itself throws an unhandled exception
-        },
-    });
-};
-
-export function useGenerateAICardsMutation() {
-    const { token } = useAuth();
-    const queryClient = useQueryClient();
-
-    return useMutation({
-        mutationFn: (data: { userInstructions: string; numberOfCards: number }) =>
-            generateAICardsForNewDeckAction(data.userInstructions, data.numberOfCards, token ?? undefined),
-        onSuccess: (data) => {
-            if (data.success) {
-                // Optionally, could invalidate something or show a global success message
-                // For now, page-specific handling is probably better
-            } else {
-                // Error handled by the component
-            }
-        },
-        onError: (error) => {
-            // Error handled by the component
-            console.error("Error in useGenerateAICardsMutation:", error);
-        },
-    });
-}
-
-export function useCreateDeckWithAICardsMutation() {
-    const { token } = useAuth();
-    const queryClient = useQueryClient();
-
-    return useMutation({
-        mutationFn: (data: { deckName: string; cardsData: GeneratedCardData[] }) =>
-            createDeckWithAICardsAction(data.deckName, data.cardsData, token ?? undefined),
-        onSuccess: (data) => {
-            if (data.success && data.deck) {
-                queryClient.invalidateQueries({ queryKey: ['decks'] });
-                queryClient.invalidateQueries({ queryKey: ['deck', data.deck.id] });
-                queryClient.invalidateQueries({ queryKey: ['deckCards', data.deck.id] });
-                // Redirect will be handled by the component
-            } else {
-                // Error handled by the component
-            }
-        },
-        onError: (error) => {
-            // Error handled by the component
-            console.error("Error in useCreateDeckWithAICardsMutation:", error);
-        },
-    });
-}
-
 // --- New Hook for Missed Cards ---
 interface UseMissedCardsForDeckInTimeframeParams {
     deckId: string | undefined;
@@ -760,12 +632,16 @@ export const useMissedCardsForDeckInTimeframe = ({
 // --- AI Chat Hooks ---
 
 export const useCreateAIChatSessionMutation = () => {
+    const queryClient = useQueryClient();
     const { token } = useAuth();
     return useMutation<{ id: string }, Error, void>({
         mutationFn: async () => {
             const res = await createAIChatSessionAction(token ?? undefined);
             if (!res.success || !res.session) throw new Error(res.message || 'Failed to create session');
             return { id: res.session.id };
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: aiChatKeys.sessions });
         }
     });
 };
@@ -773,7 +649,7 @@ export const useCreateAIChatSessionMutation = () => {
 export const useAIChatSessions = () => {
     const { token } = useAuth();
     return useQuery<AIChatSession[], Error>({
-        queryKey: ['aiChat', 'sessions'],
+        queryKey: aiChatKeys.sessions,
         queryFn: async () => {
             const res = await listAIChatSessionsAction(token ?? undefined);
             if (!res.success || !res.sessions) throw new Error(res.message || 'Failed to load sessions');
@@ -787,7 +663,7 @@ export const useAIChatSessions = () => {
 export const useAIChatMessages = (sessionId: string | undefined) => {
     const { token } = useAuth();
     return useQuery<AIChatMessage[], Error>({
-        queryKey: ['aiChat', 'messages', sessionId],
+        queryKey: aiChatKeys.messages(sessionId),
         queryFn: async () => {
             if (!sessionId) throw new Error('Session id required');
             const res = await getAIChatMessagesAction(sessionId, token ?? undefined);
@@ -805,16 +681,17 @@ export const useSendAIChatMessageMutation = (sessionId: string) => {
     return useMutation<
         { assistantText?: string; pendingToolCalls?: { id: string; name: string; arguments: unknown }[] },
         Error,
-        { text: string }
+        { text: string; pageUrl?: string }
     >({
-        mutationFn: async ({ text }) => {
-            const res = await sendAIChatMessageAction(sessionId, text, token ?? undefined);
+        mutationFn: async ({ text, pageUrl }) => {
+            const res = await sendAIChatMessageAction(sessionId, text, token ?? undefined, pageUrl);
             if (!res.success) throw new Error(res.message || 'Failed to send');
             return { assistantText: res.assistantText, pendingToolCalls: res.pendingToolCalls };
         },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['aiChat', 'messages', sessionId] });
-            queryClient.invalidateQueries({ queryKey: ['aiChat', 'pending', sessionId] });
+        onSettled: () => {
+            queryClient.invalidateQueries({ queryKey: aiChatKeys.sessions });
+            queryClient.invalidateQueries({ queryKey: aiChatKeys.messages(sessionId) });
+            queryClient.invalidateQueries({ queryKey: aiChatKeys.pending(sessionId) });
         }
     });
 };
@@ -822,7 +699,7 @@ export const useSendAIChatMessageMutation = (sessionId: string) => {
 export const usePendingToolCalls = (sessionId: string | undefined) => {
     const { token } = useAuth();
     return useQuery<{ id: string; name: string; arguments: unknown }[], Error>({
-        queryKey: ['aiChat', 'pending', sessionId],
+        queryKey: aiChatKeys.pending(sessionId),
         queryFn: async () => {
             if (!sessionId) throw new Error('Session id required');
             const res = await getPendingToolCallsAction(sessionId, token ?? undefined);
@@ -843,8 +720,9 @@ export const useApproveToolCallMutation = (sessionId: string) => {
             if (!res.success) throw new Error(res.message || 'Failed to approve tool');
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['aiChat', 'messages', sessionId] });
-            queryClient.invalidateQueries({ queryKey: ['aiChat', 'pending', sessionId] });
+            queryClient.invalidateQueries({ queryKey: aiChatKeys.sessions });
+            queryClient.invalidateQueries({ queryKey: aiChatKeys.messages(sessionId) });
+            queryClient.invalidateQueries({ queryKey: aiChatKeys.pending(sessionId) });
         }
     });
 };

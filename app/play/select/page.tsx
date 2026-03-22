@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useDecks } from '@/hooks/queryHooks';
 import Button from '@/components/Button';
+import PageHeader from '@/components/PageHeader';
 import Spinner from '@/components/Spinner';
 import type { Deck } from '@/types';
 import { useAuth } from '@/context/useAuth';
@@ -87,12 +88,11 @@ export default function SelectDecksForPlayPage() {
 
     return (
         <div className="max-w-2xl mx-auto p-4 sm:p-6 space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Select Decks to Play</h1>
-                <Link href="/" passHref legacyBehavior>
-                    <Button as="a" variant="default" size="sm">&larr; My Decks</Button>
-                </Link>
-            </div>
+            <PageHeader
+                title="Select Decks to Play"
+                backHref="/decks"
+                backLabel="Decks"
+            />
 
             <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md border border-gray-200 space-y-4">
                 <div className="flex flex-wrap gap-2 mb-4">

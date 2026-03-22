@@ -1,17 +1,26 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/useAuth';
 import {
-    useCreateAIChatSessionMutation,
-    useAIChatMessages,
-    useSendAIChatMessageMutation,
-    usePendingToolCalls,
     useApproveToolCallMutation,
+    useAIChatMessages,
     useAIChatSessions,
+    useCreateAIChatSessionMutation,
+    usePendingToolCalls,
+    useSendAIChatMessageMutation,
 } from '@/hooks/queryHooks';
 
-// --- Inline Tool Call Card ---
+function formatSessionTime(value: Date | string) {
+    return new Date(value).toLocaleString([], {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+    });
+}
+
 function ToolCallCard({
     tc,
     autoApprove,
@@ -26,7 +35,6 @@ function ToolCallCard({
     const [handled, setHandled] = useState(false);
     const autoApprovedRef = useRef(false);
 
-    // Auto-approve effect
     useEffect(() => {
         if (autoApprove && !handled && !autoApprovedRef.current) {
             autoApprovedRef.current = true;
@@ -35,7 +43,7 @@ function ToolCallCard({
                 { onSuccess: () => setHandled(true) }
             );
         }
-    }, [autoApprove, handled, tc.id, approveMutation]);
+    }, [approveMutation, autoApprove, handled, tc.id]);
 
     const handleApprove = () => {
         approveMutation.mutate(
@@ -52,36 +60,44 @@ function ToolCallCard({
     };
 
     return (
-        <div className="my-1 border border-amber-300 bg-amber-50 rounded-lg p-2 text-sm">
-            <div className="flex items-center justify-between">
-                <span className="font-semibold text-amber-800">{tc.name}</span>
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                        Pending action
+                    </div>
+                    <div className="mt-1 font-semibold text-amber-950">{tc.name}</div>
+                </div>
                 <button
-                    className="text-xs text-gray-500 hover:text-gray-700"
-                    onClick={() => setExpanded(!expanded)}
+                    type="button"
+                    className="text-xs text-amber-700 hover:text-amber-900"
+                    onClick={() => setExpanded((prev) => !prev)}
                 >
                     {expanded ? 'Hide' : 'Show'} args
                 </button>
             </div>
             {expanded && (
-                <pre className="mt-1 text-xs bg-white border rounded p-1.5 overflow-auto max-h-32">
+                <pre className="mt-2 max-h-40 overflow-auto rounded-lg border border-amber-200 bg-white p-2 text-xs text-gray-700">
                     {JSON.stringify(tc.arguments, null, 2)}
                 </pre>
             )}
             {handled || autoApprovedRef.current ? (
-                <div className="mt-1.5 text-xs font-medium text-green-700">
-                    {autoApprove ? 'Auto-approved' : 'Approved'}
+                <div className="mt-2 text-xs font-medium text-green-700">
+                    {autoApprove ? 'Auto-accepted' : 'Accepted'}
                 </div>
             ) : (
-                <div className="mt-1.5 flex gap-2">
+                <div className="mt-3 flex gap-2">
                     <button
-                        className="px-2 py-0.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                        type="button"
+                        className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
                         onClick={handleApprove}
                         disabled={approveMutation.isPending}
                     >
-                        Approve
+                        Accept
                     </button>
                     <button
-                        className="px-2 py-0.5 text-xs bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+                        type="button"
+                        className="rounded-md bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600 disabled:opacity-50"
                         onClick={handleReject}
                         disabled={approveMutation.isPending}
                     >
@@ -93,53 +109,56 @@ function ToolCallCard({
     );
 }
 
-// --- Tool Result Card (rendered for role='tool' messages) ---
 function ToolResultCard({ content }: { content: string }) {
     let parsed: { tool?: string; result?: unknown; error?: string } | null = null;
+
     try {
         parsed = JSON.parse(content);
     } catch {
-        // not JSON
+        parsed = null;
     }
 
     if (!parsed) {
-        return (
-            <div className="my-1 text-xs text-gray-500 italic">{content}</div>
-        );
+        return <div className="text-xs italic text-gray-500">{content}</div>;
     }
 
-    const isError = !!parsed.error;
+    const isError = Boolean(parsed.error);
+
     return (
         <div
-            className={`my-1 border rounded-lg p-2 text-xs ${
+            className={`rounded-xl border p-3 text-xs shadow-sm ${
                 isError
                     ? 'border-red-300 bg-red-50 text-red-800'
                     : 'border-green-300 bg-green-50 text-green-800'
             }`}
         >
             <div className="font-semibold">
-                {isError ? 'Error' : 'Result'}: {parsed.tool}
+                {isError ? 'Action error' : 'Action result'}: {parsed.tool}
             </div>
-            {parsed.error && <div className="mt-0.5">{parsed.error}</div>}
+            {parsed.error && <div className="mt-1">{parsed.error}</div>}
             {parsed.result != null && (
-                <pre className="mt-0.5 overflow-auto max-h-24 whitespace-pre-wrap">
-                    {String(typeof parsed.result === 'string'
+                <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-white/80 p-2 text-xs">
+                    {typeof parsed.result === 'string'
                         ? parsed.result
-                        : JSON.stringify(parsed.result, null, 2))}
+                        : JSON.stringify(parsed.result, null, 2)}
                 </pre>
             )}
         </div>
     );
 }
 
-// --- Main Widget ---
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+const shortcutLabel = isMac ? '⌘K' : 'Ctrl+K';
+
 export default function AIChatWidget() {
     const { token } = useAuth();
+    const pathname = usePathname();
     const [isOpen, setIsOpen] = useState(false);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [autoApprove, setAutoApprove] = useState(false);
     const [input, setInput] = useState('');
     const [showSessionPicker, setShowSessionPicker] = useState(false);
+    const [optimisticMessage, setOptimisticMessage] = useState<string | null>(null);
 
     const inputRef = useRef<HTMLTextAreaElement | null>(null);
     const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -150,9 +169,35 @@ export default function AIChatWidget() {
     const sendMutation = useSendAIChatMessageMutation(sessionId || '');
     const { data: pending } = usePendingToolCalls(sessionId || undefined);
 
-    // Auto-create session on first open
+    const activeSession = useMemo(
+        () => sessions?.find((session) => session.id === sessionId) ?? null,
+        [sessionId, sessions]
+    );
+
     useEffect(() => {
-        if (isOpen && !sessionId && token && !createSession.isPending) {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
+                event.preventDefault();
+                setIsOpen((prev) => !prev);
+                setShowSessionPicker(false);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
+    useEffect(() => {
+        if (!isOpen || !token || sessionId || createSession.isPending) {
+            return;
+        }
+
+        if (sessions && sessions.length > 0) {
+            setSessionId(sessions[0].id);
+            return;
+        }
+
+        if (sessions && sessions.length === 0) {
             createSession.mutate(undefined, {
                 onSuccess: (data) => {
                     setSessionId(data.id);
@@ -160,32 +205,50 @@ export default function AIChatWidget() {
                 },
             });
         }
-    }, [isOpen, sessionId, token]);
+    }, [createSession, isOpen, refetchSessions, sessionId, sessions, token]);
 
-    // Scroll to bottom on new messages
+    useEffect(() => {
+        if (!optimisticMessage || !messages?.length) {
+            return;
+        }
+
+        const userMessages = messages.filter((message) => message.role === 'user');
+        const latestUserMessage = userMessages[userMessages.length - 1];
+
+        if (latestUserMessage?.content === optimisticMessage) {
+            setOptimisticMessage(null);
+        }
+    }, [messages, optimisticMessage]);
+
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, pending]);
+    }, [messages, optimisticMessage, pending, showSessionPicker]);
 
-    // Focus input when opened
     useEffect(() => {
         if (isOpen && sessionId) {
-            setTimeout(() => inputRef.current?.focus(), 100);
+            window.setTimeout(() => inputRef.current?.focus(), 100);
         }
     }, [isOpen, sessionId]);
 
     const handleSend = useCallback(() => {
-        if (!input.trim() || !sessionId || sendMutation.isPending) return;
-        sendMutation.mutate({ text: input.trim() });
+        const text = input.trim();
+        if (!text || !sessionId || sendMutation.isPending) {
+            return;
+        }
+
+        setOptimisticMessage(text);
+        sendMutation.mutate({ text, pageUrl: pathname ?? undefined });
         setInput('');
-    }, [input, sessionId, sendMutation]);
+    }, [input, pathname, sendMutation, sessionId]);
 
     const handleNewChat = () => {
         createSession.mutate(undefined, {
             onSuccess: (data) => {
                 setSessionId(data.id);
-                refetchSessions();
+                setInput('');
+                setOptimisticMessage(null);
                 setShowSessionPicker(false);
+                refetchSessions();
             },
         });
     };
@@ -195,232 +258,265 @@ export default function AIChatWidget() {
         setShowSessionPicker(false);
     };
 
-    if (!token) return null;
+    if (!token) {
+        return null;
+    }
 
     return (
         <>
-            {/* Floating toggle button */}
             {!isOpen && (
-                <button
-                    onClick={() => setIsOpen(true)}
-                    className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-primary text-white shadow-lg hover:bg-red-700 transition-colors flex items-center justify-center"
-                    aria-label="Open AI Chat"
-                >
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="w-6 h-6"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
+                <div className="fixed bottom-4 right-4 z-40">
+                    <button
+                        type="button"
+                        onClick={() => setIsOpen(true)}
+                        className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-3 text-sm font-medium text-gray-700 shadow-lg transition hover:border-primary hover:text-primary"
+                        aria-label={`Open AI sidebar (${shortcutLabel})`}
+                        title={`Open AI sidebar (${shortcutLabel})`}
                     >
-                        <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                        />
-                    </svg>
-                </button>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5 text-primary">
+                            <path fillRule="evenodd" d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401z" clipRule="evenodd" />
+                        </svg>
+                        <span>AI</span>
+                        <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500">
+                            {shortcutLabel}
+                        </span>
+                    </button>
+                </div>
             )}
 
-            {/* Chat window */}
             {isOpen && (
-                <div className="fixed bottom-6 right-6 z-50 w-[400px] h-[520px] bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden">
-                    {/* Header */}
-                    <div className="flex items-center gap-2 px-3 py-2 border-b bg-gray-50 flex-shrink-0">
-                        <span className="font-semibold text-sm flex-1 truncate">
-                            AI Assistant
-                        </span>
-
-                        {/* Session picker */}
-                        <div className="relative">
-                            <button
-                                className="text-xs px-2 py-1 bg-white border rounded hover:bg-gray-100"
-                                onClick={() => setShowSessionPicker(!showSessionPicker)}
-                            >
-                                Chats
-                            </button>
-                            {showSessionPicker && (
-                                <div className="absolute right-0 top-full mt-1 w-56 bg-white border rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
-                                    <button
-                                        className="w-full text-left px-3 py-2 text-xs font-semibold text-primary hover:bg-gray-50 border-b"
-                                        onClick={handleNewChat}
-                                    >
-                                        + New Chat
-                                    </button>
-                                    {sessions?.map((s) => (
-                                        <button
-                                            key={s.id}
-                                            className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 ${
-                                                s.id === sessionId
-                                                    ? 'bg-primary/10 font-medium'
-                                                    : ''
-                                            }`}
-                                            onClick={() => handleSelectSession(s.id)}
-                                        >
-                                            <div className="truncate">
-                                                {s.title || 'AI Assistant'}
+                <>
+                    <button
+                        type="button"
+                        className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[1px] lg:hidden"
+                        aria-label="Close AI sidebar overlay"
+                        onClick={() => {
+                            setIsOpen(false);
+                            setShowSessionPicker(false);
+                        }}
+                    />
+                    <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[420px] flex-col border-l border-gray-200 bg-white shadow-2xl">
+                        <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+                            <div className="flex items-start gap-3">
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                                                <path fillRule="evenodd" d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                        <div className="min-w-0">
+                                            <div className="truncate text-sm font-semibold text-gray-900">
+                                                {activeSession?.title || 'AI assistant'}
                                             </div>
-                                            <div className="text-gray-400 text-[10px]">
-                                                {new Date(s.updatedAt).toLocaleString()}
+                                            <div className="text-[11px] text-gray-500">
+                                                Ask questions, inspect decks, or run edits
                                             </div>
-                                        </button>
-                                    ))}
-                                    {(!sessions || sessions.length === 0) && (
-                                        <div className="px-3 py-2 text-xs text-gray-400">
-                                            No chats yet
+                                        </div>
+                                    </div>
+                                    {pathname && (
+                                        <div className="mt-2 truncate text-[11px] text-gray-400" title={pathname}>
+                                            Context: {pathname}
                                         </div>
                                     )}
                                 </div>
-                            )}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsOpen(false);
+                                        setShowSessionPicker(false);
+                                    }}
+                                    className="rounded-md p-1.5 text-gray-400 hover:bg-gray-200 hover:text-gray-700"
+                                    aria-label="Close AI sidebar"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <div className="mt-3 flex items-center gap-2">
+                                <div className="relative flex-1">
+                                    <button
+                                        type="button"
+                                        className="flex w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm text-gray-700 hover:border-gray-300"
+                                        onClick={() => setShowSessionPicker((prev) => !prev)}
+                                    >
+                                        <span className="truncate">{activeSession?.title || 'Select a chat'}</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 text-gray-400">
+                                            <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                                        </svg>
+                                    </button>
+                                    {showSessionPicker && (
+                                        <div className="absolute left-0 right-0 top-full mt-2 max-h-72 overflow-y-auto rounded-xl border border-gray-200 bg-white p-2 shadow-xl">
+                                            <button
+                                                type="button"
+                                                className="mb-2 w-full rounded-lg bg-primary px-3 py-2 text-left text-sm font-medium text-white hover:bg-red-700"
+                                                onClick={handleNewChat}
+                                            >
+                                                + New chat
+                                            </button>
+                                            {sessions?.length ? (
+                                                <div className="space-y-1">
+                                                    {sessions.map((session) => (
+                                                        <button
+                                                            key={session.id}
+                                                            type="button"
+                                                            className={`w-full rounded-lg px-3 py-2 text-left text-sm ${
+                                                                session.id === sessionId
+                                                                    ? 'bg-primary/10 text-primary'
+                                                                    : 'hover:bg-gray-50 text-gray-700'
+                                                            }`}
+                                                            onClick={() => handleSelectSession(session.id)}
+                                                        >
+                                                            <div className="truncate font-medium">
+                                                                {session.title || 'Untitled chat'}
+                                                            </div>
+                                                            <div className="mt-0.5 text-[11px] text-gray-400">
+                                                                {formatSessionTime(session.updatedAt)}
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="px-2 py-4 text-center text-sm text-gray-400">
+                                                    No chats yet.
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                <label className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-600">
+                                    <input
+                                        type="checkbox"
+                                        className="accent-primary"
+                                        checked={autoApprove}
+                                        onChange={(event) => setAutoApprove(event.target.checked)}
+                                    />
+                                    Auto-accept
+                                </label>
+                            </div>
                         </div>
 
-                        {/* Auto-approve toggle */}
-                        <label className="flex items-center gap-1 text-xs cursor-pointer select-none">
-                            <input
-                                type="checkbox"
-                                className="accent-primary"
-                                checked={autoApprove}
-                                onChange={(e) => setAutoApprove(e.target.checked)}
-                            />
-                            Auto
-                        </label>
+                        <div className="min-h-0 flex-1 overflow-y-auto bg-white px-4 py-4">
+                            <div className="space-y-3">
+                                {!sessionId && (
+                                    <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+                                        Starting chat...
+                                    </div>
+                                )}
 
-                        {/* Close button */}
-                        <button
-                            onClick={() => {
-                                setIsOpen(false);
-                                setShowSessionPicker(false);
-                            }}
-                            className="text-gray-400 hover:text-gray-600 ml-1"
-                            aria-label="Close chat"
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="w-4 h-4"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                                strokeWidth={2}
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d="M6 18L18 6M6 6l12 12"
-                                />
-                            </svg>
-                        </button>
-                    </div>
+                                {sessionId && !messages?.length && !optimisticMessage && !sendMutation.isPending && (
+                                    <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+                                        Start a chat to ask questions, inspect decks, or have the assistant prepare changes for approval.
+                                    </div>
+                                )}
 
-                    {/* Messages area */}
-                    <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
-                        {!sessionId && (
-                            <div className="text-sm text-gray-400 py-4 text-center">
-                                Starting session...
-                            </div>
-                        )}
-                        {sessionId &&
-                            messages?.map((m) => {
-                                if (m.role === 'tool') {
-                                    return (
-                                        <ToolResultCard
-                                            key={m.id}
-                                            content={m.content}
-                                        />
-                                    );
-                                }
-                                if (m.role === 'system') {
-                                    return (
-                                        <div
-                                            key={m.id}
-                                            className="text-xs text-gray-400 italic text-center"
-                                        >
-                                            {m.content}
-                                        </div>
-                                    );
-                                }
-                                return (
-                                    <div
-                                        key={m.id}
-                                        className={
-                                            m.role === 'user'
-                                                ? 'text-right'
-                                                : 'text-left'
+                                {sessionId && pending && pending.length > 0 && (
+                                    <div className="space-y-2">
+                                        {pending.map((toolCall) => (
+                                            <ToolCallCard
+                                                key={toolCall.id}
+                                                tc={toolCall}
+                                                autoApprove={autoApprove}
+                                                sessionId={sessionId}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+
+                                {sessionId &&
+                                    messages?.map((message) => {
+                                        if (message.role === 'tool') {
+                                            return <ToolResultCard key={message.id} content={message.content} />;
                                         }
-                                    >
-                                        <div
-                                            className={`inline-block max-w-[85%] px-3 py-1.5 rounded-lg text-sm ${
-                                                m.role === 'user'
-                                                    ? 'bg-primary text-white'
-                                                    : 'bg-gray-100 border text-gray-900'
-                                            }`}
-                                        >
-                                            <pre className="whitespace-pre-wrap break-words font-sans">
-                                                {m.content}
-                                            </pre>
+
+                                        if (message.role === 'system') {
+                                            return (
+                                                <div key={message.id} className="text-center text-xs italic text-gray-400">
+                                                    {message.content}
+                                                </div>
+                                            );
+                                        }
+
+                                        return (
+                                            <div key={message.id} className={message.role === 'user' ? 'text-right' : 'text-left'}>
+                                                <div
+                                                    className={`inline-block max-w-[88%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
+                                                        message.role === 'user'
+                                                            ? 'bg-primary text-white'
+                                                            : 'border border-gray-200 bg-gray-50 text-gray-900'
+                                                    }`}
+                                                >
+                                                    <pre className="whitespace-pre-wrap break-words font-sans">
+                                                        {message.content}
+                                                    </pre>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+
+                                {optimisticMessage && (
+                                    <div className="text-right">
+                                        <div className="inline-block max-w-[88%] rounded-2xl bg-primary px-4 py-3 text-sm text-white opacity-80 shadow-sm">
+                                            <pre className="whitespace-pre-wrap break-words font-sans">{optimisticMessage}</pre>
                                         </div>
                                     </div>
-                                );
-                            })}
+                                )}
 
-                        {/* Pending tool calls inline */}
-                        {sessionId &&
-                            pending?.map((tc) => (
-                                <ToolCallCard
-                                    key={tc.id}
-                                    tc={tc}
-                                    autoApprove={autoApprove}
-                                    sessionId={sessionId}
-                                />
-                            ))}
+                                {sendMutation.isPending && (
+                                    <div className="text-left">
+                                        <div className="inline-block rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500 shadow-sm">
+                                            Thinking...
+                                        </div>
+                                    </div>
+                                )}
 
-                        {/* Sending indicator */}
-                        {sendMutation.isPending && (
-                            <div className="text-left">
-                                <div className="inline-block px-3 py-1.5 rounded-lg text-sm bg-gray-100 border text-gray-400">
-                                    Thinking...
+                                {sendMutation.isError && (
+                                    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                                        Error: {sendMutation.error?.message || 'Something went wrong'}
+                                    </div>
+                                )}
+
+                                <div ref={messagesEndRef} />
+                            </div>
+                        </div>
+
+                        {sessionId && (
+                            <div className="border-t border-gray-200 bg-white px-4 py-3">
+                                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-2 shadow-sm">
+                                    <textarea
+                                        ref={inputRef}
+                                        className="min-h-[88px] w-full resize-none bg-transparent px-2 py-2 text-sm text-gray-900 outline-none"
+                                        rows={4}
+                                        placeholder="Ask about your decks or request changes..."
+                                        value={input}
+                                        onChange={(event) => setInput(event.target.value)}
+                                        onKeyDown={(event) => {
+                                            if (event.key === 'Enter' && !event.shiftKey) {
+                                                event.preventDefault();
+                                                handleSend();
+                                            }
+                                        }}
+                                    />
+                                    <div className="flex items-center justify-between gap-3 border-t border-gray-200 px-2 pt-2">
+                                        <div className="text-xs text-gray-400">
+                                            Enter to send, Shift+Enter for a new line
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleSend}
+                                            disabled={sendMutation.isPending || !input.trim()}
+                                            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                            Send
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         )}
-
-                        <div ref={messagesEndRef} />
-                    </div>
-
-                    {/* Input bar */}
-                    {sessionId && (
-                        <div className="px-3 py-2 border-t bg-white flex-shrink-0">
-                            <div className="flex gap-2 items-end">
-                                <textarea
-                                    ref={inputRef}
-                                    className="flex-1 border rounded-lg p-2 text-sm resize-none"
-                                    rows={2}
-                                    placeholder="Ask about your decks..."
-                                    value={input}
-                                    onChange={(e) => setInput(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (
-                                            e.key === 'Enter' &&
-                                            !e.shiftKey
-                                        ) {
-                                            e.preventDefault();
-                                            handleSend();
-                                        }
-                                    }}
-                                />
-                                <button
-                                    onClick={handleSend}
-                                    disabled={
-                                        sendMutation.isPending ||
-                                        !input.trim()
-                                    }
-                                    className="px-3 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    Send
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                </div>
+                    </aside>
+                </>
             )}
         </>
     );

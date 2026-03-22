@@ -15,6 +15,7 @@ import { ReviewResult, Card, AnswerMode } from '@/types';
 import CardReviewer from '@/components/CardReviewer';
 import type { AnswerData } from '@/components/answer-modes/AnswerModeDispatcher';
 import Spinner from '@/components/Spinner';
+import PageHeader from '@/components/PageHeader';
 
 // Helper function to shuffle array
 function shuffleArray<T>(array: T[]): T[] {
@@ -221,29 +222,40 @@ export default function PlayDeckPage() {
     const totalCards = reviewSequence.length;
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col gap-3 sm:grid sm:grid-cols-[auto_1fr_auto] sm:items-center">
-                <Link href={`/deck/${deckId}/overview`} className="text-sm text-primary hover:underline whitespace-nowrap sm:justify-self-start">
-                    &larr; Overview
-                </Link>
-                <div className="text-center space-y-1 sm:justify-self-center">
-                    <h1 className="text-lg sm:text-xl font-semibold text-gray-700">
-                        Playing: <span className="text-primary font-bold">{deck?.name || '...'}</span> {strategyTitleSegment}
-                    </h1>
-                    <p className="text-sm font-medium text-gray-500">
-                        Card {Math.min(currentCardIndex + 1, totalCards)} / {totalCards}
-                    </p>
-                </div>
-                <div className="hidden sm:block sm:w-24" aria-hidden="true" />
-            </div>
-            <hr className="border-gray-300" />
-
-            <CardReviewer
-                card={currentCard}
-                onReview={handleReview}
-                isPendingReview={createReviewMutation.isPending}
-                deckName={deck?.name}
+        <div className="flex flex-col gap-3" style={{ minHeight: 'calc(100dvh - 8rem)' }}>
+            <PageHeader
+                title={deck?.name || 'Deck review'}
+                backHref={`/deck/${deckId}/overview`}
+                backLabel="Overview"
+                actions={
+                    <>
+                        {strategyTitleSegment && (
+                            <span className="text-sm text-gray-400 whitespace-nowrap">
+                                {strategyTitleSegment.trim()}
+                            </span>
+                        )}
+                        <span className="text-sm font-medium text-gray-500 whitespace-nowrap">
+                            {Math.min(currentCardIndex + 1, totalCards)} / {totalCards}
+                        </span>
+                    </>
+                }
             />
+
+            {/* Progress bar */}
+            <div className="w-full h-1 bg-gray-200 rounded-full flex-shrink-0">
+                <div
+                    className="h-1 bg-primary rounded-full transition-all duration-300"
+                    style={{ width: `${((currentCardIndex) / totalCards) * 100}%` }}
+                />
+            </div>
+
+            <div className="flex-1">
+                <CardReviewer
+                    card={currentCard}
+                    onReview={handleReview}
+                    isPendingReview={createReviewMutation.isPending}
+                />
+            </div>
         </div>
     );
 }

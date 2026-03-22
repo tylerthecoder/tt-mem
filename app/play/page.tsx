@@ -9,6 +9,7 @@ import { ReviewResult, Card, AnswerMode } from '@/types';
 import CardReviewer from '@/components/CardReviewer';
 import type { AnswerData } from '@/components/answer-modes/AnswerModeDispatcher';
 import Spinner from '@/components/Spinner';
+import PageHeader from '@/components/PageHeader';
 import { useAuth } from '@/context/useAuth';
 
 // Helper function to shuffle array (if not already in a utils file)
@@ -194,21 +195,21 @@ function PlayPageContent() {
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col gap-3 sm:grid sm:grid-cols-[auto_1fr_auto] sm:items-center">
-                <Link href={selectedDeckIds ? "/play/select" : "/"} className="text-sm text-primary hover:underline whitespace-nowrap sm:justify-self-start">
-                    &larr; {selectedDeckIds ? "Change Selection" : "My Decks"}
-                </Link>
-                <div className="text-center space-y-1 sm:justify-self-center">
-                    <h1 className="text-lg sm:text-xl font-semibold text-gray-700">
-                        {sessionTitle} (Strategy: {strategy})
-                    </h1>
-                    <p className="text-sm font-medium text-gray-500">
-                        Card {Math.min(currentCardIndex + 1, totalCards)} / {totalCards}
-                    </p>
-                </div>
-                <div className="hidden sm:block sm:w-24" aria-hidden="true" />
-            </div>
-            <hr className="border-gray-300" />
+            <PageHeader
+                title={sessionTitle}
+                backHref={selectedDeckIds ? '/play/select' : '/decks'}
+                backLabel={selectedDeckIds ? 'Change Selection' : 'Decks'}
+                actions={
+                    <>
+                        <span className="text-sm text-gray-400 whitespace-nowrap">
+                            {strategy}
+                        </span>
+                        <span className="text-sm font-medium text-gray-500">
+                            Card {Math.min(currentCardIndex + 1, totalCards)} / {totalCards}
+                        </span>
+                    </>
+                }
+            />
 
             <CardReviewer
                 card={currentCard}

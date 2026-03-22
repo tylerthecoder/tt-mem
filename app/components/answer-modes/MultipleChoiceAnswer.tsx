@@ -60,14 +60,14 @@ export default function MultipleChoiceAnswer({ card, onAnswer, isPending }: Mult
     };
 
     return (
-        <div className="space-y-4 pt-4 border-t border-gray-200">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-3 pt-3 border-t border-gray-100">
+            <div className="grid grid-cols-2 gap-2">
                 {shuffledChoices.map((choice, idx) => (
                     <button
                         key={idx}
                         onClick={() => handleSelect(choice)}
                         disabled={answered}
-                        className={`p-3 rounded-lg text-left text-sm font-medium transition-colors ${getChoiceStyle(choice)} ${!answered ? 'cursor-pointer' : 'cursor-default'}`}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors text-center ${getChoiceStyle(choice)} ${!answered ? 'cursor-pointer' : 'cursor-default'}`}
                     >
                         {choice}
                     </button>
@@ -75,15 +75,17 @@ export default function MultipleChoiceAnswer({ card, onAnswer, isPending }: Mult
             </div>
 
             {answered && (
-                <div className="space-y-3">
-                    <p className={`text-lg font-semibold ${isCorrect ? 'text-green-700' : 'text-red-700'}`}>
-                        {isCorrect ? 'Correct!' : 'Incorrect'}
-                    </p>
-                    {card.extra_context && (
-                        <p className="text-sm text-gray-500 italic">{card.extra_context}</p>
-                    )}
-                    <Button onClick={handleContinue} variant="secondary" disabled={isPending}>
-                        {isPending ? 'Recording...' : 'Continue'}
+                <div className="flex items-center justify-between gap-3">
+                    <div className="text-left">
+                        <p className={`text-base font-semibold ${isCorrect ? 'text-green-700' : 'text-red-700'}`}>
+                            {isCorrect ? 'Correct!' : 'Incorrect'}
+                        </p>
+                        {card.extra_context && (
+                            <p className="text-xs text-gray-500 italic mt-0.5">{card.extra_context}</p>
+                        )}
+                    </div>
+                    <Button onClick={handleContinue} variant="secondary" size="sm" disabled={isPending}>
+                        {isPending ? 'Saving…' : 'Continue →'}
                     </Button>
                 </div>
             )}

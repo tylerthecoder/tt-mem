@@ -3,6 +3,7 @@
 import React from 'react';
 import Button from '@/components/Button';
 import Link from 'next/link';
+import PageHeader from '@/components/PageHeader';
 
 type PlaybackType = 'simultaneous' | 'ascending' | 'descending';
 
@@ -148,13 +149,16 @@ export default function IntervalTrainingPage() {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-800">Interval Training</h1>
-          <div className="text-gray-600">Score: {score.correct}/{score.total} ({scorePct}%)</div>
-        </div>
-        <Link href="/" className="text-primary underline hover:text-red-700">Home</Link>
-      </div>
+      <PageHeader
+        title="Interval Training"
+        backHref="/"
+        backLabel="Home"
+        actions={
+          <span className="text-sm font-medium text-gray-500 whitespace-nowrap">
+            {score.correct}/{score.total} ({scorePct}%)
+          </span>
+        }
+      />
 
       {!audioReady && (
         <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded p-3 flex items-center justify-between">

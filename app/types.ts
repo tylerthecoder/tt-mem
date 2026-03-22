@@ -167,44 +167,6 @@ export interface QuizAttempt {
     createdAt: Date;
 }
 
-// --- AI Deck Edit Types ---
-
-export interface AICreateCardSuggestion {
-    type: 'create';
-    front_text: string;
-    back_text: string;
-    extra_context?: string;
-    front_content_type?: FrontContentType;
-    front_image_url?: string;
-    front_map_country_code?: string;
-    answer_mode?: AnswerMode;
-    correct_answer?: string;
-    choices?: string[];
-    correct_country_code?: string;
-}
-
-export interface AIUpdateCardSuggestion {
-    type: 'update';
-    cardId: string;
-    front_text?: string;
-    back_text?: string;
-    extra_context?: string;
-    front_content_type?: FrontContentType;
-    front_image_url?: string;
-    front_map_country_code?: string;
-    answer_mode?: AnswerMode;
-    correct_answer?: string;
-    choices?: string[];
-    correct_country_code?: string;
-}
-
-export interface AIDeleteCardSuggestion {
-    type: 'delete';
-    cardId: string;          // ID of the card to delete
-}
-
-export type AICardEditSuggestion = AICreateCardSuggestion | AIUpdateCardSuggestion | AIDeleteCardSuggestion;
-
 // --- Reading Comprehension Types ---
 
 export interface ReadingComprehensionQuestion {

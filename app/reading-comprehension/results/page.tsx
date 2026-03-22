@@ -6,6 +6,7 @@ import Button from '@/components/Button';
 import Spinner from '@/components/Spinner';
 import { getPastReadingResultsAction } from '@/actions/readingComprehension';
 import type { ReadingSession, ReadingAttempt } from '@/types';
+import PageHeader from '@/components/PageHeader';
 
 interface ReadingResult {
     session: ReadingSession;
@@ -39,7 +40,7 @@ export default function ReadingComprehensionResultsPage() {
 
     if (isLoading) {
         return (
-            <div className="container mx-auto px-4 py-8 min-h-screen">
+            <div className="min-h-screen py-8">
                 <div className="text-center">
                     <Spinner />
                     <p className="mt-4 text-gray-600">Loading your reading comprehension results...</p>
@@ -50,9 +51,13 @@ export default function ReadingComprehensionResultsPage() {
 
     if (error) {
         return (
-            <div className="container mx-auto px-4 py-8 min-h-screen">
+            <div className="min-h-screen py-8">
                 <div className="text-center">
-                    <h1 className="text-3xl font-bold text-gray-800 mb-4">Reading Comprehension Results</h1>
+                    <PageHeader
+                        title="Reading Comprehension Results"
+                        backHref="/reading-comprehension"
+                        backLabel="Reading"
+                    />
                     <p className="text-red-600 mb-6">{error}</p>
                     <Link href="/reading-comprehension">
                         <Button variant="primary">← Back to Reading Comprehension</Button>
@@ -84,14 +89,13 @@ export default function ReadingComprehensionResultsPage() {
     };
 
     return (
-        <div className="container mx-auto px-4 py-8 min-h-screen">
+        <div className="min-h-screen py-8">
             <div className="max-w-6xl mx-auto">
-                <div className="flex items-center justify-between mb-8">
-                    <h1 className="text-3xl font-bold text-gray-800">Reading Comprehension Results</h1>
-                    <Link href="/reading-comprehension">
-                        <Button variant="default">← Back to Reading Comprehension</Button>
-                    </Link>
-                </div>
+                <PageHeader
+                    title="Reading Comprehension Results"
+                    backHref="/reading-comprehension"
+                    backLabel="Reading"
+                />
 
                 {results.length === 0 ? (
                     <div className="text-center py-12">

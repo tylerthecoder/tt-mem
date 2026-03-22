@@ -41,7 +41,7 @@ export default function MapSelectAnswer({ card, onAnswer, isPending }: MapSelect
     };
 
     return (
-        <div className="space-y-4 pt-4 border-t border-gray-200">
+        <div className="space-y-2 pt-3 border-t border-gray-100">
             <WorldMap
                 onCountryClick={handleCountryClick}
                 selectedCountryCode={selectedCountry ?? undefined}
@@ -51,26 +51,28 @@ export default function MapSelectAnswer({ card, onAnswer, isPending }: MapSelect
             />
 
             {selectedCountry && !submitted && (
-                <div className="text-center space-y-2">
+                <div className="flex items-center justify-between gap-3">
                     <p className="text-sm text-gray-600">
                         Selected: <span className="font-semibold">{selectedCountry}</span>
                     </p>
-                    <Button onClick={handleSubmit} variant="secondary">
-                        Confirm Selection
+                    <Button onClick={handleSubmit} variant="secondary" size="sm">
+                        Confirm
                     </Button>
                 </div>
             )}
 
             {submitted && (
-                <div className="space-y-3 text-center">
-                    <p className={`text-lg font-semibold ${isCorrect ? 'text-green-700' : 'text-red-700'}`}>
-                        {isCorrect ? 'Correct!' : `Incorrect - the answer was ${card.correct_country_code}`}
-                    </p>
-                    {card.extra_context && (
-                        <p className="text-sm text-gray-500 italic">{card.extra_context}</p>
-                    )}
-                    <Button onClick={handleContinue} variant="secondary" disabled={isPending}>
-                        {isPending ? 'Recording...' : 'Continue'}
+                <div className="flex items-center justify-between gap-3">
+                    <div className="text-left">
+                        <p className={`text-base font-semibold ${isCorrect ? 'text-green-700' : 'text-red-700'}`}>
+                            {isCorrect ? 'Correct!' : `Incorrect — ${card.correct_country_code}`}
+                        </p>
+                        {card.extra_context && (
+                            <p className="text-xs text-gray-500 italic mt-0.5">{card.extra_context}</p>
+                        )}
+                    </div>
+                    <Button onClick={handleContinue} variant="secondary" size="sm" disabled={isPending}>
+                        {isPending ? 'Saving…' : 'Continue →'}
                     </Button>
                 </div>
             )}

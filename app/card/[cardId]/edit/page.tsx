@@ -7,6 +7,7 @@ import { useCard, useUpdateCardMutation } from '@/hooks/queryHooks';
 import { useAuth } from '@/context/useAuth';
 import Button from '@/components/Button';
 import Spinner from '@/components/Spinner'; // Assuming a Spinner component exists
+import PageHeader from '@/components/PageHeader';
 
 export default function EditCardPage() {
     const params = useParams();
@@ -83,12 +84,11 @@ export default function EditCardPage() {
 
     return (
         <div className="max-w-2xl mx-auto space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-semibold text-gray-800">Edit Card</h1>
-                <Link href={`/deck/${card.deck_id}/edit`} passHref legacyBehavior>
-                    <Button as="a" variant="secondary" size="sm">Back to Deck Edit</Button>
-                </Link>
-            </div>
+            <PageHeader
+                title="Edit Card"
+                backHref={`/deck/${card.deck_id}/overview`}
+                backLabel="Deck"
+            />
 
             <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow space-y-4">
                 <div>

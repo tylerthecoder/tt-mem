@@ -15,24 +15,24 @@ export default function FrontContentRenderer({ card }: FrontContentRendererProps
     switch (contentType) {
         case FrontContentType.IMAGE:
             return (
-                <div className="space-y-3">
-                    <p className="text-2xl sm:text-3xl font-medium text-gray-900 whitespace-pre-wrap">
-                        {card.front_text}
-                    </p>
+                <div className="space-y-2">
                     {card.front_image_url && (
                         <img
                             src={card.front_image_url}
                             alt={card.front_text}
-                            className="max-w-full max-h-64 mx-auto rounded-lg object-contain"
+                            className="max-w-full max-h-44 mx-auto rounded-lg object-contain border border-gray-200 shadow-sm"
                         />
                     )}
+                    <p className="text-lg sm:text-xl font-medium text-gray-900 whitespace-pre-wrap">
+                        {card.front_text}
+                    </p>
                 </div>
             );
 
         case FrontContentType.MAP_HIGHLIGHT:
             return (
-                <div className="space-y-3">
-                    <p className="text-2xl sm:text-3xl font-medium text-gray-900 whitespace-pre-wrap">
+                <div className="space-y-2">
+                    <p className="text-lg sm:text-xl font-medium text-gray-900 whitespace-pre-wrap">
                         {card.front_text}
                     </p>
                     <WorldMap highlightedCountryCode={card.front_map_country_code} />
