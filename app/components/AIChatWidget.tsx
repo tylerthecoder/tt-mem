@@ -675,6 +675,63 @@ function ThinkingIndicator() {
     );
 }
 
+function renderToolPart(
+    part: ToolUIPart,
+    messageId: string,
+    autoApprove: boolean,
+    addToolApprovalResponse: (response: { id: string; approved: boolean; reason?: string }) => void | PromiseLike<void>,
+) {
+    const toolName = part.type.replace(/^tool-/, '');
+
+    if (part.state === 'approval-requested' && part.approval?.id) {
+        return (
+            <ToolApprovalCard
+                key={part.toolCallId || `${messageId}-${toolName}`}
+                toolName={toolName}
+                input={part.input}
+                approvalId={part.approval.id}
+                autoApprove={autoApprove}
+                addToolApprovalResponse={addToolApprovalResponse}
+            />
+        );
+    }
+
+    if (part.state === 'output-available') {
+        return (
+            <ToolResultCard
+                key={part.toolCallId || `${messageId}-${toolName}`}
+                toolName={toolName}
+                output={part.output}
+            />
+        );
+    }
+
+    if (part.state === 'output-error') {
+        return (
+            <ToolResultCard
+                key={part.toolCallId || `${messageId}-${toolName}`}
+                toolName={toolName}
+                errorText={part.errorText || 'Tool execution failed'}
+            />
+        );
+    }
+
+    if (part.state === 'input-available' || part.state === 'input-streaming') {
+        return (
+            <ToolCardFrame
+                key={part.toolCallId || `${messageId}-${toolName}`}
+                tone="neutral"
+                statusLabel="Preparing action"
+                toolName={toolName}
+                payload={part.input}
+                mode="input"
+            />
+        );
+    }
+
+    return null;
+}
+
 function MessageList({
     messages,
     autoApprove,
@@ -693,57 +750,9 @@ function MessageList({
 
                 return (
                     <div key={message.id} className="space-y-2">
-                        {(shouldRenderToolsFirst ? toolParts : []).map((part) => {
-                            const toolName = part.type.replace(/^tool-/, '');
-
-                            if (part.state === 'approval-requested' && part.approval?.id) {
-                                return (
-                                    <ToolApprovalCard
-                                        key={part.toolCallId || `${message.id}-${toolName}`}
-                                        toolName={toolName}
-                                        input={part.input}
-                                        approvalId={part.approval.id}
-                                        autoApprove={autoApprove}
-                                        addToolApprovalResponse={addToolApprovalResponse}
-                                    />
-                                );
-                            }
-
-                            if (part.state === 'output-available') {
-                                return (
-                                    <ToolResultCard
-                                        key={part.toolCallId || `${message.id}-${toolName}`}
-                                        toolName={toolName}
-                                        output={part.output}
-                                    />
-                                );
-                            }
-
-                            if (part.state === 'output-error') {
-                                return (
-                                    <ToolResultCard
-                                        key={part.toolCallId || `${message.id}-${toolName}`}
-                                        toolName={toolName}
-                                        errorText={part.errorText || 'Tool execution failed'}
-                                    />
-                                );
-                            }
-
-                            if (part.state === 'input-available' || part.state === 'input-streaming') {
-                                return (
-                                    <ToolCardFrame
-                                        key={part.toolCallId || `${message.id}-${toolName}`}
-                                        tone="neutral"
-                                        statusLabel="Preparing action"
-                                        toolName={toolName}
-                                        payload={part.input}
-                                        mode="input"
-                                    />
-                                );
-                            }
-
-                            return null;
-                        })}
+                        {(shouldRenderToolsFirst ? toolParts : []).map((part) =>
+                            renderToolPart(part, message.id, autoApprove, addToolApprovalResponse)
+                        )}
 
                         {textContent && (
                             <div className={message.role === 'user' ? 'text-right' : 'text-left'}>
@@ -761,57 +770,9 @@ function MessageList({
                             </div>
                         )}
 
-                        {(!shouldRenderToolsFirst ? toolParts : []).map((part) => {
-                            const toolName = part.type.replace(/^tool-/, '');
-
-                            if (part.state === 'approval-requested' && part.approval?.id) {
-                                return (
-                                    <ToolApprovalCard
-                                        key={part.toolCallId || `${message.id}-${toolName}`}
-                                        toolName={toolName}
-                                        input={part.input}
-                                        approvalId={part.approval.id}
-                                        autoApprove={autoApprove}
-                                        addToolApprovalResponse={addToolApprovalResponse}
-                                    />
-                                );
-                            }
-
-                            if (part.state === 'output-available') {
-                                return (
-                                    <ToolResultCard
-                                        key={part.toolCallId || `${message.id}-${toolName}`}
-                                        toolName={toolName}
-                                        output={part.output}
-                                    />
-                                );
-                            }
-
-                            if (part.state === 'output-error') {
-                                return (
-                                    <ToolResultCard
-                                        key={part.toolCallId || `${message.id}-${toolName}`}
-                                        toolName={toolName}
-                                        errorText={part.errorText || 'Tool execution failed'}
-                                    />
-                                );
-                            }
-
-                            if (part.state === 'input-available' || part.state === 'input-streaming') {
-                                return (
-                                    <ToolCardFrame
-                                        key={part.toolCallId || `${message.id}-${toolName}`}
-                                        tone="neutral"
-                                        statusLabel="Preparing action"
-                                        toolName={toolName}
-                                        payload={part.input}
-                                        mode="input"
-                                    />
-                                );
-                            }
-
-                            return null;
-                        })}
+                        {(!shouldRenderToolsFirst ? toolParts : []).map((part) =>
+                            renderToolPart(part, message.id, autoApprove, addToolApprovalResponse)
+                        )}
                     </div>
                 );
             })}

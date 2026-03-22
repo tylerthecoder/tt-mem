@@ -12,7 +12,7 @@ import { ObjectId } from 'mongodb';
 import { maybeAssignSessionTitle } from '@/agent/fastPath';
 import { shouldEnableWebSearch } from '@/agent/helpers';
 import { DECK_ASSISTANT_INSTRUCTIONS } from '@/agent/instructions';
-import { getOwnedSession, loadUIMessageHistory, replaceUIMessageHistory } from '@/agent/store';
+import { getOwnedSession, replaceUIMessageHistory } from '@/agent/store';
 import { createAgentTools } from '@/agent/tools';
 import { verifyAuthToken } from '@/lib/auth';
 
@@ -22,15 +22,6 @@ interface ChatRequestBody {
     message?: UIMessage;
     token?: string;
     pageUrl?: string;
-}
-
-function mergeIncomingMessage(history: UIMessage[], message: UIMessage) {
-    const index = history.findIndex((item) => item.id === message.id);
-    if (index === -1) {
-        return [...history, message];
-    }
-
-    return history.map((item, itemIndex) => (itemIndex === index ? message : item));
 }
 
 function getMessageText(message: UIMessage | undefined) {
@@ -102,12 +93,7 @@ export async function POST(request: Request) {
         return new Response('Session not found', { status: 404 });
     }
 
-    const previousMessages = await loadUIMessageHistory(sessionId);
-    const mergedMessages = incomingMessages.length > 0
-        ? incomingMessages
-        : message
-            ? mergeIncomingMessage(previousMessages, message)
-            : previousMessages;
+    const mergedMessages = incomingMessages;
     const latestUserText = getLatestUserText(mergedMessages);
     const shouldPreferWebSearch = shouldEnableWebSearch(latestUserText);
     const latestIncomingMessage = incomingMessages[incomingMessages.length - 1];
