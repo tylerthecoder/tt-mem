@@ -7,22 +7,41 @@ export interface AuthContextType {
     login: (password: string) => Promise<void>; // Keep promise for async handling
     logout: () => void;
     isLoading: boolean;
+    isAuthInitializing: boolean;
     error: string | null;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function isJwtExpired(token: string): boolean {
+    try {
+        const parts = token.split('.');
+        if (parts.length !== 3) return true;
+        const payload = JSON.parse(atob(parts[1]));
+        if (!payload.exp) return false;
+        // Add a 30-second buffer so we don't use a token that expires mid-request
+        return Date.now() / 1000 > payload.exp - 30;
+    } catch {
+        return true;
+    }
+}
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [token, setToken] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(false);
+    const [isAuthInitializing, setIsAuthInitializing] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
-    // Attempt to load token from localStorage on initial mount
+    // Load and validate token from localStorage on initial mount
     useEffect(() => {
         const storedToken = localStorage.getItem('authToken');
-        if (storedToken) {
+        if (storedToken && !isJwtExpired(storedToken)) {
             setToken(storedToken);
+        } else if (storedToken) {
+            // Token exists but is expired — clear it so the UI reflects logged-out state
+            localStorage.removeItem('authToken');
         }
+        setIsAuthInitializing(false);
     }, []);
 
     const login = async (password: string): Promise<void> => { // Return Promise<void>
@@ -62,7 +81,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     return (
-        <AuthContext.Provider value={{ token, login, logout, isLoading, error }}>
+        <AuthContext.Provider value={{ token, login, logout, isLoading, isAuthInitializing, error }}>
             {children}
         </AuthContext.Provider>
     );

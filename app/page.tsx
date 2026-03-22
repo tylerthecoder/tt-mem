@@ -17,6 +17,7 @@ const apps: AppCard[] = [
     { title: 'Reading Comp', description: 'Read and answer comprehension questions.', href: '/reading-comprehension', icon: '📖' },
     { title: 'Reading Speed', description: 'Practice speed reading and track comprehension.', href: '/speed-reading', icon: '⚡' },
     { title: 'Interval Training', description: 'Ear training: guess musical intervals.', href: '/interval-training', icon: '🎵' },
+    { title: 'Mental Math', description: 'Practice arithmetic speed and accuracy.', href: '/mental-math', icon: '🧮' },
 ];
 
 export default function HomePage() {

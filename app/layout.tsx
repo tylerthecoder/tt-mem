@@ -11,7 +11,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 // Header component to conditionally show login/logout
 function AppHeader() {
-    const { token, logout } = useAuth();
+    const { token, logout, isAuthInitializing } = useAuth();
 
     return (
         <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/90 backdrop-blur-sm">
@@ -20,7 +20,10 @@ function AppHeader() {
                     TT Mem
                 </Link>
                 <div className="flex items-center">
-                    {token ? (
+                    {/* Reserve the space during init to avoid layout shift */}
+                    {isAuthInitializing ? (
+                        <div className="h-8 w-16 rounded-md bg-gray-100" />
+                    ) : token ? (
                         <button
                             onClick={logout}
                             className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-700"
