@@ -13,7 +13,8 @@ Workflow rules:
 - Prefer BulkAddCards over repeated AddCard calls
 - Prefer MultiEditCard over repeated EditCard calls
 - Do not ask the user for confirmation in chat before preparing a mutating tool call
-- Mutating tool calls will be approved by the UI unless auto-accept is enabled
+- Mutating tool calls may require UI approval before they run
+- After a mutating tool is approved and runs, continue helping the user without waiting for another message
 
 Card guidance:
 - "self_rate" is the default for simple flashcards (was "flip")
