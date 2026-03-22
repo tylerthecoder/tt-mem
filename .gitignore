@@ -43,3 +43,6 @@ dist-ssr
 
 # Bun artifacts
 .bun
+
+# TypeScript incremental build cache
+*.tsbuildinfo
