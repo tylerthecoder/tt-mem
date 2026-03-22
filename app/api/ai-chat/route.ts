@@ -9,9 +9,9 @@ import {
     validateUIMessages,
 } from 'ai';
 import { ObjectId } from 'mongodb';
-import { maybeAssignSessionTitle } from '@/agent/fastPath';
 import { shouldEnableWebSearch } from '@/agent/helpers';
 import { DECK_ASSISTANT_INSTRUCTIONS } from '@/agent/instructions';
+import { maybeAssignSessionTitle } from '@/agent/sessionTitle';
 import { getOwnedSession, replaceUIMessageHistory } from '@/agent/store';
 import { createAgentTools } from '@/agent/tools';
 import { verifyAuthToken } from '@/lib/auth';
