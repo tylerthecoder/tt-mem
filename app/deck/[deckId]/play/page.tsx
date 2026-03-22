@@ -11,7 +11,7 @@ import {
     useMissedCardsForDeckInTimeframe
 } from '@/hooks/queryHooks';
 import { useAuth } from '@/context/useAuth';
-import { ReviewResult, Card, AnswerMode } from '@/types';
+import { ReviewResult, Card } from '@/types';
 import CardReviewer from '@/components/CardReviewer';
 import type { AnswerData } from '@/components/answer-modes/AnswerModeDispatcher';
 import Spinner from '@/components/Spinner';
@@ -120,7 +120,7 @@ export default function PlayDeckPage() {
             deckId,
             result: data.result,
             is_correct: data.is_correct,
-            answer_mode: currentCard.answer_mode,
+            answer_type: currentCard.answer_type,
             user_answer: data.user_answer,
         }, {
             onSuccess: () => {

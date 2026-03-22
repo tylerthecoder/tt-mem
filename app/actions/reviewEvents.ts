@@ -106,7 +106,7 @@ export async function getCardReviewHistoryAction(cardId: string, limit = 50): Pr
                 result: mapped.result,
                 timestamp: mapped.timestamp,
                 is_correct: mapped.is_correct,
-                answer_mode: mapped.answer_mode,
+                answer_type: mapped.answer_type,
                 user_answer: mapped.user_answer,
             }];
         });
@@ -158,7 +158,7 @@ export async function getLatestReviewForCardAction(cardId: string): Promise<Late
                 result: mappedEvent.result,
                 timestamp: mappedEvent.timestamp,
                 is_correct: mappedEvent.is_correct,
-                answer_mode: mappedEvent.answer_mode,
+                answer_type: mappedEvent.answer_type,
                 user_answer: mappedEvent.user_answer,
             };
             return { success: true, reviewEvent: finalEvent };

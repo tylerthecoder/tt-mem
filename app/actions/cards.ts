@@ -2,8 +2,8 @@
 
 import { ObjectId, Filter, Document } from 'mongodb';
 import { revalidatePath } from 'next/cache';
-import type { Card, CardDocument, ReviewEventDocument, DeckDocument } from '@/types';
-import { ReviewResult, AnswerMode, FrontContentType } from '@/types';
+import type { Card, CardDocument, ReviewEventDocument, DeckDocument, PromptType, AnswerType } from '@/types';
+import { ReviewResult } from '@/types';
 // import jwt from 'jsonwebtoken'; // Removed
 import { connectToDatabase } from '@/lib/db';
 import { verifyAuthToken } from '@/lib/auth'; // Import shared auth function
@@ -38,21 +38,18 @@ interface CreateCardResult {
 
 interface CreateCardInput {
     deckId: string;
-    frontText: string;
-    backText: string;
     token: string | undefined;
-    frontContentType?: FrontContentType;
-    frontImageUrl?: string;
-    frontMapCountryCode?: string;
-    answerMode?: AnswerMode;
-    correctAnswer?: string;
-    choices?: string[];
-    correctCountryCode?: string;
+    promptType: PromptType;
+    promptContent: string;
+    promptText?: string;
+    answerType: AnswerType;
+    answerContent: string | string[];
+    correctIndex?: number;
     extraContext?: string;
 }
 
 export async function createCardAction(input: CreateCardInput): Promise<CreateCardResult> {
-    const { deckId, frontText, backText, token } = input;
+    const { deckId, token } = input;
 
     const user = verifyAuthToken(token);
     if (!user) return { success: false, message: 'Unauthorized' };
@@ -60,27 +57,22 @@ export async function createCardAction(input: CreateCardInput): Promise<CreateCa
     if (!deckId || !ObjectId.isValid(deckId)) {
         return { success: false, message: 'Valid Deck ID is required' };
     }
-    if (!frontText || !frontText.trim()) {
-        return { success: false, message: 'Front text cannot be empty' };
-    }
-    if (!backText || !backText.trim()) {
-        return { success: false, message: 'Back text cannot be empty' };
+
+    const promptContent = typeof input.promptContent === 'string' ? input.promptContent.trim() : '';
+    const promptText = input.promptText?.trim() || undefined;
+
+    if (!promptContent && !promptText) {
+        return { success: false, message: 'Prompt content is required' };
     }
 
-    // Validate answer mode specific requirements
-    if (input.answerMode === AnswerMode.MULTIPLE_CHOICE) {
-        if (!input.choices || input.choices.length < 2) {
-            return { success: false, message: 'Multiple choice cards require at least 2 choices' };
+    if (input.answerType === 'multi') {
+        if (!Array.isArray(input.answerContent) || input.answerContent.length < 2) {
+            return { success: false, message: 'Multi cards require answer_content as an array with at least 2 choices' };
         }
-        if (!input.correctAnswer) {
-            return { success: false, message: 'Multiple choice cards require a correct_answer' };
+    } else {
+        if (typeof input.answerContent !== 'string' || !input.answerContent.trim()) {
+            return { success: false, message: 'answer_content is required' };
         }
-    }
-    if (input.answerMode === AnswerMode.TYPE_IN && !input.correctAnswer) {
-        return { success: false, message: 'Type-in cards require a correct_answer' };
-    }
-    if (input.answerMode === AnswerMode.MAP_SELECT && !input.correctCountryCode) {
-        return { success: false, message: 'Map select cards require a correct_country_code' };
     }
 
     try {
@@ -89,43 +81,30 @@ export async function createCardAction(input: CreateCardInput): Promise<CreateCa
 
         const newCardData: Omit<CardDocument, '_id'> = {
             deck_id: new ObjectId(deckId),
-            front_text: frontText.trim(),
-            back_text: backText.trim(),
+            prompt_type: input.promptType,
+            prompt_content: promptContent,
+            answer_type: input.answerType,
+            answer_content: input.answerContent,
             createdAt: new Date(),
             updatedAt: new Date(),
         };
 
-        // Add optional rich card fields
-        if (input.frontContentType) newCardData.front_content_type = input.frontContentType;
-        if (input.frontImageUrl) newCardData.front_image_url = input.frontImageUrl;
-        if (input.frontMapCountryCode) newCardData.front_map_country_code = input.frontMapCountryCode;
-        if (input.answerMode) newCardData.answer_mode = input.answerMode;
-        if (input.correctAnswer) newCardData.correct_answer = input.correctAnswer;
-        if (input.choices) newCardData.choices = input.choices;
-        if (input.correctCountryCode) newCardData.correct_country_code = input.correctCountryCode;
+        if (promptText) newCardData.prompt_text = promptText;
+        if (input.correctIndex !== undefined) newCardData.correct_index = input.correctIndex;
         if (input.extraContext) newCardData.extra_context = input.extraContext;
 
         const result = await cardsCollection.insertOne(newCardData as CardDocument);
-
-        if (!result.insertedId) {
-            throw new Error('Card creation failed in DB.');
-        }
+        if (!result.insertedId) throw new Error('Card creation failed in DB.');
 
         const createdCardDoc = await cardsCollection.findOne({ _id: result.insertedId });
-        // Use specific card mapper
         const mappedCreatedCard = mapCardDocument(createdCardDoc);
+        if (!mappedCreatedCard) throw new Error('Failed to map created card.');
 
-        if (!mappedCreatedCard) {
-            throw new Error('Failed to map created card.');
-        }
-
-        // No client.close() needed
         revalidatePath(`/deck/${deckId}/edit`);
-        return { success: true, card: mappedCreatedCard }; // Already type Card
+        return { success: true, card: mappedCreatedCard };
 
     } catch (error) {
         console.error('[Create Card Action Error]', error);
-        // No client?.close() needed
         const message = error instanceof Error ? error.message : 'Failed to create card';
         return { success: false, message };
     }
@@ -188,6 +167,18 @@ export async function getCardAction(cardId: string, token: string | undefined): 
         console.error('[Fetch Single Card Action Error]', error);
         const message = error instanceof Error ? error.message : 'Failed to fetch card';
         return { success: false, message };
+    }
+}
+
+// --- Fetch Single Card Without Auth (public read) ---
+export async function getCardPublicAction(cardId: string): Promise<Card | null> {
+    if (!cardId || !ObjectId.isValid(cardId)) return null;
+    try {
+        const { db } = await connectToDatabase();
+        const doc = await db.collection<CardDocument>('cards').findOne({ _id: new ObjectId(cardId) });
+        return mapCardDocument(doc);
+    } catch {
+        return null;
     }
 }
 
@@ -326,21 +317,18 @@ interface UpdateCardResult {
 interface UpdateCardInput {
     cardId: string;
     deckId: string;
-    frontText?: string;
-    backText?: string;
     token: string | undefined;
-    frontContentType?: FrontContentType;
-    frontImageUrl?: string;
-    frontMapCountryCode?: string;
-    answerMode?: AnswerMode;
-    correctAnswer?: string;
-    choices?: string[];
-    correctCountryCode?: string;
-    extraContext?: string;
+    promptType?: PromptType;
+    promptContent?: string;
+    promptText?: string | null;
+    answerType?: AnswerType;
+    answerContent?: string | string[];
+    correctIndex?: number | null;
+    extraContext?: string | null;
 }
 
 export async function updateCardAction(input: UpdateCardInput): Promise<UpdateCardResult> {
-    const { cardId, deckId, frontText, backText, token } = input;
+    const { cardId, deckId, token } = input;
 
     const user = verifyAuthToken(token);
     if (!user) return { success: false, message: 'Unauthorized' };
@@ -352,29 +340,25 @@ export async function updateCardAction(input: UpdateCardInput): Promise<UpdateCa
     const updates: Partial<CardDocument> & { updatedAt: Date } = {
         updatedAt: new Date(),
     };
-    if (frontText && frontText.trim()) updates.front_text = frontText.trim();
-    if (backText && backText.trim()) updates.back_text = backText.trim();
-    if (input.frontContentType !== undefined) updates.front_content_type = input.frontContentType;
-    if (input.frontImageUrl !== undefined) updates.front_image_url = input.frontImageUrl;
-    if (input.frontMapCountryCode !== undefined) updates.front_map_country_code = input.frontMapCountryCode;
-    if (input.answerMode !== undefined) updates.answer_mode = input.answerMode;
-    if (input.correctAnswer !== undefined) updates.correct_answer = input.correctAnswer;
-    if (input.choices !== undefined) updates.choices = input.choices;
-    if (input.correctCountryCode !== undefined) updates.correct_country_code = input.correctCountryCode;
-    if (input.extraContext !== undefined) updates.extra_context = input.extraContext;
+    if (input.promptType !== undefined) updates.prompt_type = input.promptType;
+    if (input.promptContent !== undefined) updates.prompt_content = input.promptContent.trim();
+    if (input.promptText !== undefined) updates.prompt_text = input.promptText ?? undefined;
+    if (input.answerType !== undefined) updates.answer_type = input.answerType;
+    if (input.answerContent !== undefined) updates.answer_content = input.answerContent;
+    if (input.correctIndex !== undefined) updates.correct_index = input.correctIndex ?? undefined;
+    if (input.extraContext !== undefined) updates.extra_context = input.extraContext ?? undefined;
 
     try {
         const { db } = await connectToDatabase();
         const cardsCollection = db.collection<CardDocument>('cards');
 
         const result = await cardsCollection.findOneAndUpdate(
-            { _id: new ObjectId(cardId), deck_id: new ObjectId(deckId) }, // Ensure card belongs to the deck
+            { _id: new ObjectId(cardId), deck_id: new ObjectId(deckId) },
             { $set: updates },
             { returnDocument: 'after' }
         );
 
         const mappedUpdatedCard = mapCardDocument(result);
-
         if (!mappedUpdatedCard) {
             return { success: false, message: 'Card not found for update or update failed' };
         }
@@ -452,7 +436,7 @@ interface CreateReviewEventInput {
     deckId: string;
     result?: ReviewResult;
     is_correct?: boolean;
-    answer_mode?: AnswerMode;
+    answer_type?: AnswerType;
     user_answer?: string;
 }
 
@@ -479,7 +463,7 @@ export async function createReviewEventAction(input: CreateReviewEventInput): Pr
         };
         if (result !== undefined) newReviewEventData.result = result;
         if (input.is_correct !== undefined) newReviewEventData.is_correct = input.is_correct;
-        if (input.answer_mode) newReviewEventData.answer_mode = input.answer_mode;
+        if (input.answer_type) newReviewEventData.answer_type = input.answer_type;
         if (input.user_answer) newReviewEventData.user_answer = input.user_answer;
 
         const dbResult = await reviewsCollection.insertOne(newReviewEventData as ReviewEventDocument);

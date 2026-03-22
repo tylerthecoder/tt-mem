@@ -22,15 +22,18 @@ function shuffleArray<T>(array: T[]): T[] {
 export default function MultipleChoiceAnswer({ card, onAnswer, isPending }: MultipleChoiceAnswerProps) {
     const [selectedChoice, setSelectedChoice] = useState<string | null>(null);
 
+    const choices = card.answer_content as string[];
+    const correctAnswer = choices[card.correct_index ?? 0];
+
     const shuffledChoices = useMemo(() => {
-        return shuffleArray(card.choices ?? []);
+        return shuffleArray(choices ?? []);
     }, [card.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         setSelectedChoice(null);
     }, [card.id]);
 
-    const isCorrect = selectedChoice !== null && selectedChoice === card.correct_answer;
+    const isCorrect = selectedChoice !== null && selectedChoice === correctAnswer;
     const answered = selectedChoice !== null;
 
     const handleSelect = (choice: string) => {
@@ -50,10 +53,10 @@ export default function MultipleChoiceAnswer({ card, onAnswer, isPending }: Mult
         if (!answered) {
             return 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-800';
         }
-        if (choice === card.correct_answer) {
+        if (choice === correctAnswer) {
             return 'bg-green-100 border-2 border-green-500 text-green-800';
         }
-        if (choice === selectedChoice && choice !== card.correct_answer) {
+        if (choice === selectedChoice && choice !== correctAnswer) {
             return 'bg-red-100 border-2 border-red-500 text-red-800';
         }
         return 'bg-gray-100 border border-gray-200 text-gray-400';

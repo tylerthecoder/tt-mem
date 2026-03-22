@@ -25,12 +25,14 @@ export default function MapSelectAnswer({ card, onAnswer, isPending }: MapSelect
         setSelectedCountry(countryCode);
     };
 
+    const correctCountryCode = card.answer_content as string;
+
     const handleSubmit = () => {
-        if (!selectedCountry || !card.correct_country_code) return;
+        if (!selectedCountry || !correctCountryCode) return;
         setSubmitted(true);
     };
 
-    const isCorrect = submitted && selectedCountry?.toUpperCase() === card.correct_country_code?.toUpperCase();
+    const isCorrect = submitted && selectedCountry?.toUpperCase() === correctCountryCode?.toUpperCase();
 
     const handleContinue = () => {
         if (!submitted || !selectedCountry) return;
@@ -45,7 +47,7 @@ export default function MapSelectAnswer({ card, onAnswer, isPending }: MapSelect
             <WorldMap
                 onCountryClick={handleCountryClick}
                 selectedCountryCode={selectedCountry ?? undefined}
-                correctCountryCode={card.correct_country_code}
+                correctCountryCode={correctCountryCode}
                 showFeedback={submitted}
                 interactive={!submitted}
             />
@@ -65,7 +67,7 @@ export default function MapSelectAnswer({ card, onAnswer, isPending }: MapSelect
                 <div className="flex items-center justify-between gap-3">
                     <div className="text-left">
                         <p className={`text-base font-semibold ${isCorrect ? 'text-green-700' : 'text-red-700'}`}>
-                            {isCorrect ? 'Correct!' : `Incorrect — ${card.correct_country_code}`}
+                            {isCorrect ? 'Correct!' : `Incorrect — ${correctCountryCode}`}
                         </p>
                         {card.extra_context && (
                             <p className="text-xs text-gray-500 italic mt-0.5">{card.extra_context}</p>

@@ -62,7 +62,7 @@ export function createAgentTools({
         parameters: z.object({
             deckId: z.string(),
             cardId: z.string(),
-        }),
+        }).strict(),
         execute: async (args: unknown) => {
             const pendingId = await createPendingToolCall(sessionId, userMessageId, 'RemoveCard', args);
             return { pendingApproval: true, toolCallId: pendingId };
@@ -98,7 +98,7 @@ export function createAgentTools({
     const viewAllDecksTool = tool({
         name: 'ViewAllDecks',
         description: 'List all decks with their ids and names.',
-        parameters: z.object({}),
+        parameters: z.object({}).strict(),
         execute: async () => {
             const res = await fetchDecksAction();
             return { decks: (res.decks || []).map((deck) => ({ id: deck.id, name: deck.name })) };

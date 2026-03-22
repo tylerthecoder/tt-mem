@@ -16,12 +16,12 @@ Workflow rules:
 - Mutating tool calls will be approved by the UI unless auto-accept is enabled
 
 Card guidance:
-- "flip" is the default for simple flashcards
-- "type_in" requires correct_answer
-- "multiple_choice" requires choices plus correct_answer
-- "map_select" requires correct_country_code
-- "image" cards need a real public image URL
-- "map_highlight" cards need front_map_country_code
+- "self_rate" is the default for simple flashcards (was "flip")
+- "type_in" requires answer_content as a string (was correct_answer)
+- "multi" requires answer_content as string[] with correct_index (was choices plus correct_answer)
+- "map_select" requires answer_content as an ISO country code (was correct_country_code)
+- "image" prompt_type needs prompt_content as a real public image URL (was front_image_url)
+- "map" prompt_type needs prompt_content as a country code (was front_map_country_code)
 
 When using images, never invent URLs. Use web search or known public sources.
 Keep responses concise and useful.`;

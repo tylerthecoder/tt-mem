@@ -26,19 +26,20 @@ export default function TypeInAnswer({ card, onAnswer, isPending }: TypeInAnswer
     }, [card.id]);
 
     const handleSubmit = async () => {
-        if (!userInput.trim() || !card.correct_answer) return;
+        const correct = card.answer_content as string;
+        if (!userInput.trim() || !correct) return;
         setIsScoring(true);
         try {
-            const result = await scoreAnswerAction(userInput.trim(), card.correct_answer, token ?? undefined);
+            const result = await scoreAnswerAction(userInput.trim(), correct, token ?? undefined);
             if (result.success && result.is_correct !== undefined) {
                 setFeedback({ is_correct: result.is_correct, rationale: result.rationale });
             } else {
                 // Fallback to exact match
-                const isCorrect = userInput.trim().toLowerCase() === card.correct_answer.toLowerCase();
+                const isCorrect = userInput.trim().toLowerCase() === correct.toLowerCase();
                 setFeedback({ is_correct: isCorrect });
             }
         } catch {
-            const isCorrect = userInput.trim().toLowerCase() === (card.correct_answer || '').toLowerCase();
+            const isCorrect = userInput.trim().toLowerCase() === (correct || '').toLowerCase();
             setFeedback({ is_correct: isCorrect });
         } finally {
             setIsScoring(false);
@@ -79,9 +80,9 @@ export default function TypeInAnswer({ card, onAnswer, isPending }: TypeInAnswer
                         <p className={`font-semibold ${feedback.is_correct ? 'text-green-700' : 'text-red-700'}`}>
                             {feedback.is_correct ? 'Correct!' : 'Incorrect'}
                         </p>
-                        {!feedback.is_correct && card.correct_answer && (
+                        {!feedback.is_correct && (card.answer_content as string) && (
                             <p className="text-xs text-gray-600 mt-0.5">
-                                Answer: <span className="font-medium text-green-700">{card.correct_answer}</span>
+                                Answer: <span className="font-medium text-green-700">{card.answer_content as string}</span>
                             </p>
                         )}
                         {feedback.rationale && (

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import type { Card } from '@/types';
-import { AnswerMode, ReviewResult } from '@/types';
+import { ReviewResult } from '@/types';
 import FlipAnswer from './FlipAnswer';
 import TypeInAnswer from './TypeInAnswer';
 import MultipleChoiceAnswer from './MultipleChoiceAnswer';
@@ -21,10 +21,10 @@ interface AnswerModeDispatcherProps {
 }
 
 export default function AnswerModeDispatcher({ card, onAnswer, isPending }: AnswerModeDispatcherProps) {
-    const mode = card.answer_mode ?? AnswerMode.FLIP;
+    const answerType = card.answer_type ?? 'self_rate';
 
-    switch (mode) {
-        case AnswerMode.FLIP:
+    switch (answerType) {
+        case 'self_rate':
             return (
                 <FlipAnswer
                     card={card}
@@ -33,7 +33,7 @@ export default function AnswerModeDispatcher({ card, onAnswer, isPending }: Answ
                 />
             );
 
-        case AnswerMode.TYPE_IN:
+        case 'type_in':
             return (
                 <TypeInAnswer
                     card={card}
@@ -42,7 +42,7 @@ export default function AnswerModeDispatcher({ card, onAnswer, isPending }: Answ
                 />
             );
 
-        case AnswerMode.MULTIPLE_CHOICE:
+        case 'multi':
             return (
                 <MultipleChoiceAnswer
                     card={card}
@@ -51,7 +51,7 @@ export default function AnswerModeDispatcher({ card, onAnswer, isPending }: Answ
                 />
             );
 
-        case AnswerMode.MAP_SELECT:
+        case 'map_select':
             return (
                 <MapSelectAnswer
                     card={card}

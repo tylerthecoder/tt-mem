@@ -28,7 +28,7 @@ function mapReviewHistoryEntry(eventDoc: ReviewEventDocument, cardMap: Map<strin
         result: mappedEvent.result,
         timestamp: mappedEvent.timestamp,
         is_correct: mappedEvent.is_correct,
-        answer_mode: mappedEvent.answer_mode,
+        answer_type: mappedEvent.answer_type,
         user_answer: mappedEvent.user_answer,
     };
 }
@@ -53,7 +53,15 @@ export async function fetchDeckReviewHistoryAction(deckId: string): Promise<Fetc
         // 1. Find all cards belonging to the deck
         const cardDocs = await cardsCollection.find(
             { deck_id: new ObjectId(deckId) },
-            { projection: { _id: 1, front_text: 1, back_text: 1 } } // Only fetch necessary fields
+            {
+                projection: {
+                    _id: 1,
+                    prompt_content: 1,
+                    prompt_text: 1,
+                    answer_content: 1,
+                    correct_index: 1,
+                },
+            }
         ).toArray();
 
         if (cardDocs.length === 0) {
@@ -64,7 +72,14 @@ export async function fetchDeckReviewHistoryAction(deckId: string): Promise<Fetc
         // Create a map for quick lookup of card text by ID
         const cardMap = new Map<string, { front: string; back: string }>();
         cardDocs.forEach(doc => {
-            cardMap.set(doc._id.toString(), { front: doc.front_text, back: doc.back_text });
+            const back =
+                typeof doc.answer_content === 'string'
+                    ? doc.answer_content
+                    : (doc.answer_content?.[doc.correct_index ?? 0] ?? '');
+            cardMap.set(doc._id.toString(), {
+                front: doc.prompt_text || doc.prompt_content,
+                back,
+            });
         });
 
         // 2. Find all review events for these cards

@@ -200,7 +200,12 @@ export async function importDeckAction(
             hasError = true;
         }
         if (!hasError) {
-            validCards.push({ front_text: card.front.trim(), back_text: card.back.trim() });
+            validCards.push({
+                prompt_type: 'text' as const,
+                prompt_content: card.front.trim(),
+                answer_type: 'self_rate' as const,
+                answer_content: card.back.trim(),
+            });
         }
     });
 

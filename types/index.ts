@@ -2,6 +2,9 @@
  * Shared types for API and client
  */
 
+export type PromptType = 'text' | 'image' | 'map';
+export type AnswerType = 'self_rate' | 'type_in' | 'multi' | 'map_select';
+
 export interface Deck {
     id: string;
     name: string;
@@ -12,8 +15,13 @@ export interface Deck {
 export interface Card {
     id: string;
     deck_id: string;
-    front_text: string;
-    back_text: string;
+    prompt_type: PromptType;
+    prompt_content: string;
+    prompt_text?: string;
+    answer_type: AnswerType;
+    answer_content: string | string[];
+    correct_index?: number;
+    extra_context?: string;
     created_at: string;
     updated_at: string;
 }
@@ -32,7 +40,6 @@ export interface ReviewEvent {
     timestamp: string;
 }
 
-// Request and response types for Deck endpoints
 export interface CreateDeckRequest {
     name: string;
 }
@@ -44,21 +51,29 @@ export interface UpdateDeckRequest {
 export type DeckResponse = Deck;
 export type DeckListResponse = Deck[];
 
-// Request and response types for Card endpoints
 export interface CreateCardRequest {
-    front_text: string;
-    back_text: string;
+    prompt_type: PromptType;
+    prompt_content: string;
+    prompt_text?: string;
+    answer_type: AnswerType;
+    answer_content: string | string[];
+    correct_index?: number;
+    extra_context?: string;
 }
 
 export interface UpdateCardRequest {
-    front_text?: string;
-    back_text?: string;
+    prompt_type?: PromptType;
+    prompt_content?: string;
+    prompt_text?: string;
+    answer_type?: AnswerType;
+    answer_content?: string | string[];
+    correct_index?: number;
+    extra_context?: string;
 }
 
 export type CardResponse = Card;
 export type CardListResponse = Card[];
 
-// Request and response types for ReviewEvent endpoints
 export interface CreateReviewEventRequest {
     cardId: string;
     result: ReviewResult;

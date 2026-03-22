@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useCard, useUpdateCardMutation } from '@/hooks/queryHooks';
 import { useAuth } from '@/context/useAuth';
 import Button from '@/components/Button';
@@ -18,14 +17,18 @@ export default function EditCardPage() {
     const { data: card, isLoading: isLoadingCard, error: cardError } = useCard(cardId, token ?? undefined);
     const updateMutation = useUpdateCardMutation();
 
-    const [frontText, setFrontText] = useState('');
-    const [backText, setBackText] = useState('');
+    const [promptContent, setPromptContent] = useState('');
+    const [answerContent, setAnswerContent] = useState('');
     const [localError, setLocalError] = useState<string | null>(null);
 
     useEffect(() => {
         if (card) {
-            setFrontText(card.front_text);
-            setBackText(card.back_text);
+            setPromptContent(card.prompt_content);
+            setAnswerContent(
+                typeof card.answer_content === 'string'
+                    ? card.answer_content
+                    : JSON.stringify(card.answer_content)
+            );
         }
     }, [card]);
 
@@ -36,25 +39,33 @@ export default function EditCardPage() {
             setLocalError('Card or Deck ID is missing.');
             return;
         }
-        if (!frontText.trim() || !backText.trim()) {
-            setLocalError('Front and Back text cannot be empty.');
+        if (!promptContent.trim() || !answerContent.trim()) {
+            setLocalError('Prompt and Answer cannot be empty.');
             return;
+        }
+
+        const trimmedAnswer = answerContent.trim();
+        let answerPayload: string | string[] = trimmedAnswer;
+        try {
+            const parsed = JSON.parse(trimmedAnswer) as unknown;
+            if (Array.isArray(parsed) && parsed.every((x): x is string => typeof x === 'string')) {
+                answerPayload = parsed;
+            }
+        } catch {
+            // keep string
         }
 
         updateMutation.mutate(
             {
                 cardId,
                 deckId: card.deck_id, // Pass the deckId from the fetched card
-                frontText: frontText.trim(),
-                backText: backText.trim(),
+                promptContent: promptContent.trim(),
+                answerContent: answerPayload,
                 token: token ?? undefined,
             },
             {
                 onSuccess: () => {
-                    // Optionally show a success message
-                    alert('Card updated successfully!');
-                    // Redirect back or to deck overview
-                    router.push(`/deck/${card.deck_id}/edit`); // Go back to deck edit page
+                    router.push(`/card/${cardId}`);
                 },
                 onError: (error) => {
                     setLocalError(`Failed to update card: ${error.message}`);
@@ -86,30 +97,30 @@ export default function EditCardPage() {
         <div className="max-w-2xl mx-auto space-y-6">
             <PageHeader
                 title="Edit Card"
-                backHref={`/deck/${card.deck_id}/overview`}
-                backLabel="Deck"
+                backHref={`/card/${cardId}`}
+                backLabel="Card"
             />
 
             <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow space-y-4">
                 <div>
-                    <label htmlFor="frontText" className="block text-sm font-medium text-gray-700 mb-1">Front Text</label>
+                    <label htmlFor="promptContent" className="block text-sm font-medium text-gray-700 mb-1">Prompt</label>
                     <textarea
-                        id="frontText"
+                        id="promptContent"
                         rows={4}
-                        value={frontText}
-                        onChange={(e) => setFrontText(e.target.value)}
+                        value={promptContent}
+                        onChange={(e) => setPromptContent(e.target.value)}
                         required
                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
                         disabled={isLoading}
                     />
                 </div>
                 <div>
-                    <label htmlFor="backText" className="block text-sm font-medium text-gray-700 mb-1">Back Text</label>
+                    <label htmlFor="answerContent" className="block text-sm font-medium text-gray-700 mb-1">Answer</label>
                     <textarea
-                        id="backText"
+                        id="answerContent"
                         rows={4}
-                        value={backText}
-                        onChange={(e) => setBackText(e.target.value)}
+                        value={answerContent}
+                        onChange={(e) => setAnswerContent(e.target.value)}
                         required
                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
                         disabled={isLoading}

@@ -2,7 +2,6 @@
 
 import React from 'react';
 import type { Card } from '@/types';
-import { FrontContentType } from '@/types';
 import WorldMap from '@/components/map/WorldMap';
 
 interface FrontContentRendererProps {
@@ -10,40 +9,40 @@ interface FrontContentRendererProps {
 }
 
 export default function FrontContentRenderer({ card }: FrontContentRendererProps) {
-    const contentType = card.front_content_type ?? FrontContentType.TEXT;
+    const promptType = card.prompt_type ?? 'text';
 
-    switch (contentType) {
-        case FrontContentType.IMAGE:
+    switch (promptType) {
+        case 'image':
             return (
                 <div className="space-y-2">
-                    {card.front_image_url && (
+                    {card.prompt_content && (
                         <img
-                            src={card.front_image_url}
-                            alt={card.front_text}
+                            src={card.prompt_content}
+                            alt={card.prompt_text ?? ''}
                             className="max-w-full max-h-44 mx-auto rounded-lg object-contain border border-gray-200 shadow-sm"
                         />
                     )}
                     <p className="text-lg sm:text-xl font-medium text-gray-900 whitespace-pre-wrap">
-                        {card.front_text}
+                        {card.prompt_text}
                     </p>
                 </div>
             );
 
-        case FrontContentType.MAP_HIGHLIGHT:
+        case 'map':
             return (
                 <div className="space-y-2">
                     <p className="text-lg sm:text-xl font-medium text-gray-900 whitespace-pre-wrap">
-                        {card.front_text}
+                        {card.prompt_text}
                     </p>
-                    <WorldMap highlightedCountryCode={card.front_map_country_code} />
+                    <WorldMap highlightedCountryCode={card.prompt_content} />
                 </div>
             );
 
-        case FrontContentType.TEXT:
+        case 'text':
         default:
             return (
                 <p className="text-2xl sm:text-3xl font-medium text-gray-900 whitespace-pre-wrap">
-                    {card.front_text}
+                    {card.prompt_content}
                 </p>
             );
     }

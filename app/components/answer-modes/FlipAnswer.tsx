@@ -23,7 +23,7 @@ export default function FlipAnswer({ card, onAnswer, isPending }: FlipAnswerProp
             {showAnswer ? (
                 <>
                     <p className="text-xl sm:text-2xl text-secondary whitespace-pre-wrap">
-                        {card.back_text}
+                        {card.answer_content as string}
                     </p>
                     {card.extra_context && (
                         <p className="text-xs text-gray-500 italic">{card.extra_context}</p>

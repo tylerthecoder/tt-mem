@@ -1,19 +1,9 @@
 import type { ObjectId } from 'mongodb';
 
-// --- Enums ---
+// --- Type aliases ---
 
-export enum AnswerMode {
-    FLIP = 'flip',
-    TYPE_IN = 'type_in',
-    MULTIPLE_CHOICE = 'multiple_choice',
-    MAP_SELECT = 'map_select',
-}
-
-export enum FrontContentType {
-    TEXT = 'text',
-    IMAGE = 'image',
-    MAP_HIGHLIGHT = 'map_highlight',
-}
+export type PromptType = 'text' | 'image' | 'map';
+export type AnswerType = 'self_rate' | 'type_in' | 'multi' | 'map_select';
 
 export enum ReviewResult {
     EASY = "easy",
@@ -24,7 +14,6 @@ export enum ReviewResult {
 
 // --- Database/API Interfaces ---
 
-// Represents the data structure *after* mapping from DB (_id -> id)
 export interface Deck {
     id: string;
     name: string;
@@ -35,15 +24,12 @@ export interface Deck {
 export interface Card {
     id: string;
     deck_id: string;
-    front_text: string;
-    back_text: string;
-    front_content_type?: FrontContentType;
-    front_image_url?: string;
-    front_map_country_code?: string;
-    answer_mode?: AnswerMode;
-    correct_answer?: string;
-    choices?: string[];
-    correct_country_code?: string;
+    prompt_type: PromptType;
+    prompt_content: string;
+    prompt_text?: string;
+    answer_type: AnswerType;
+    answer_content: string | string[];
+    correct_index?: number;
     extra_context?: string;
     createdAt?: Date;
     updatedAt?: Date;
@@ -55,12 +41,12 @@ export interface ReviewEvent {
     result?: ReviewResult;
     timestamp: Date;
     is_correct?: boolean;
-    answer_mode?: AnswerMode;
+    answer_type?: AnswerType;
     user_answer?: string;
 }
 
-// --- MongoDB Specific Document Types (Optional but helpful) ---
-// Represent structure in the DB before mapping
+// --- MongoDB Document Types ---
+
 export interface DeckDocument {
     _id: ObjectId;
     name: string;
@@ -71,15 +57,12 @@ export interface DeckDocument {
 export interface CardDocument {
     _id: ObjectId;
     deck_id: ObjectId;
-    front_text: string;
-    back_text: string;
-    front_content_type?: FrontContentType;
-    front_image_url?: string;
-    front_map_country_code?: string;
-    answer_mode?: AnswerMode;
-    correct_answer?: string;
-    choices?: string[];
-    correct_country_code?: string;
+    prompt_type: PromptType;
+    prompt_content: string;
+    prompt_text?: string;
+    answer_type: AnswerType;
+    answer_content: string | string[];
+    correct_index?: number;
     extra_context?: string;
     createdAt: Date;
     updatedAt: Date;
@@ -91,7 +74,7 @@ export interface ReviewEventDocument {
     result?: ReviewResult;
     timestamp: Date;
     is_correct?: boolean;
-    answer_mode?: AnswerMode;
+    answer_type?: AnswerType;
     user_answer?: string;
 }
 
@@ -117,7 +100,7 @@ export interface ReviewHistoryEntry {
     result?: ReviewResult;
     timestamp: Date;
     is_correct?: boolean;
-    answer_mode?: AnswerMode;
+    answer_type?: AnswerType;
     user_answer?: string;
 }
 

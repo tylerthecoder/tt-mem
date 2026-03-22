@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient, useQuery, type UseQueryOptions } from '@tanstack/react-query';
 // Import shared types
-import type { Card, Deck, ReviewHistoryEntry } from '@/types';
-import { ReviewResult, AnswerMode } from '@/types';
+import type { AnswerType, Card, Deck, ReviewHistoryEntry } from '@/types';
+import { ReviewResult } from '@/types';
 // Remove mock imports
 // import { fetchMockDeckCards, fetchMockDecks, mockLogin } from '../data/mock';
 // import { Card, Deck } from '../types'; // Removed problematic import
@@ -311,7 +311,14 @@ export const useCreateCardMutation = () => {
         { deckId: string; frontText: string; backText: string; token: string | undefined | null }
     >({
         mutationFn: async ({ deckId, frontText, backText, token }) => {
-            const result = await createCardAction({ deckId, frontText, backText, token: token ?? undefined });
+            const result = await createCardAction({
+                deckId,
+                token: token ?? undefined,
+                promptType: 'text',
+                promptContent: frontText.trim(),
+                answerType: 'self_rate',
+                answerContent: backText.trim(),
+            });
             if (!result.success || !result.card) {
                 throw new Error(result.message || 'Failed to create card');
             }
@@ -332,10 +339,10 @@ export const useUpdateCardMutation = () => {
     return useMutation<
         Card,
         Error,
-        { cardId: string; deckId: string; frontText?: string; backText?: string; token: string | undefined | null }
+        { cardId: string; deckId: string; promptContent?: string; answerContent?: string | string[]; token: string | undefined | null }
     >({
-        mutationFn: async ({ cardId, deckId, frontText, backText, token }) => {
-            const result = await updateCardAction({ cardId, deckId, frontText, backText, token: token ?? undefined });
+        mutationFn: async ({ cardId, deckId, promptContent, answerContent, token }) => {
+            const result = await updateCardAction({ cardId, deckId, promptContent, answerContent, token: token ?? undefined });
             if (!result.success || !result.card) {
                 throw new Error(result.message || 'Failed to update card');
             }
@@ -386,10 +393,10 @@ export const useCreateReviewEventMutation = () => {
     return useMutation<
         string,
         Error,
-        { cardId: string; deckId: string; result?: ReviewResult; is_correct?: boolean; answer_mode?: AnswerMode; user_answer?: string }
+        { cardId: string; deckId: string; result?: ReviewResult; is_correct?: boolean; answer_type?: AnswerType; user_answer?: string }
     >({
-        mutationFn: async ({ cardId, deckId, result, is_correct, answer_mode, user_answer }) => {
-            const actionResult = await createReviewEventAction({ cardId, deckId, result, is_correct, answer_mode, user_answer });
+        mutationFn: async ({ cardId, deckId, result, is_correct, answer_type, user_answer }) => {
+            const actionResult = await createReviewEventAction({ cardId, deckId, result, is_correct, answer_type, user_answer });
             if (!actionResult.success || !actionResult.reviewEventId) {
                 throw new Error(actionResult.message || 'Failed to record review event');
             }
