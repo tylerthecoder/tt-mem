@@ -1,7 +1,6 @@
 import { tool, webSearchTool } from '@openai/agents';
-import { z } from 'zod';
 import { createPendingToolCall } from '@/agent/store';
-import { BulkAddCardsSchema, CardInputSchema, CreateDeckSchema, EditCardSchema, MultiEditCardSchema, ViewDeckSchema } from '@/agent/schemas';
+import { BulkAddCardsSchema, CardInputSchema, CreateDeckSchema, EditCardSchema, MultiEditCardSchema, RemoveCardSchema, ViewAllDecksSchema, ViewDeckSchema } from '@/agent/schemas';
 import { fetchDeckByIdAction, fetchDecksAction } from '@/actions/decks';
 import { fetchDeckCardsAction } from '@/actions/cards';
 
@@ -59,10 +58,7 @@ export function createAgentTools({
     const removeCardTool = tool({
         name: 'RemoveCard',
         description: 'Remove a card from a deck.',
-        parameters: z.object({
-            deckId: z.string(),
-            cardId: z.string(),
-        }).strict(),
+        parameters: RemoveCardSchema,
         execute: async (args: unknown) => {
             const pendingId = await createPendingToolCall(sessionId, userMessageId, 'RemoveCard', args);
             return { pendingApproval: true, toolCallId: pendingId };
@@ -98,7 +94,7 @@ export function createAgentTools({
     const viewAllDecksTool = tool({
         name: 'ViewAllDecks',
         description: 'List all decks with their ids and names.',
-        parameters: z.object({}).strict(),
+        parameters: ViewAllDecksSchema,
         execute: async () => {
             const res = await fetchDecksAction();
             return { decks: (res.decks || []).map((deck) => ({ id: deck.id, name: deck.name })) };

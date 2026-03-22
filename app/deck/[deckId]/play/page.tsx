@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { Suspense, useState, useEffect, useMemo } from 'react';
 import { useParams, useSearchParams, useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Button from '@/components/Button';
@@ -28,7 +28,7 @@ function shuffleArray<T>(array: T[]): T[] {
     return shuffled;
 }
 
-export default function PlayDeckPage() {
+function PlayDeckPageContent() {
     const params = useParams();
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -257,5 +257,13 @@ export default function PlayDeckPage() {
                 />
             </div>
         </div>
+    );
+}
+
+export default function PlayDeckPage() {
+    return (
+        <Suspense fallback={<div className="flex justify-center items-center min-h-[300px]"><Spinner /><p className="ml-2">Loading play session...</p></div>}>
+            <PlayDeckPageContent />
+        </Suspense>
     );
 }
