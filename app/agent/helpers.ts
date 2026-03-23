@@ -17,15 +17,6 @@ export function undefinedIfNull<T>(value: T | null | undefined): T | undefined {
     return value ?? undefined;
 }
 
-export function isSimpleDeckListRequest(message: string) {
-    const normalized = message.toLowerCase().trim();
-    return [
-        /^(list|show)\s+(all\s+)?(my\s+)?decks[\s.!?]*$/,
-        /^(what|which)\s+decks\s+do\s+i\s+have[\s.!?]*$/,
-        /^show\s+me\s+(all\s+)?(my\s+)?decks[\s.!?]*$/,
-    ].some((pattern) => pattern.test(normalized));
-}
-
 export function shouldEnableWebSearch(message: string) {
     const normalized = message.toLowerCase();
     return [

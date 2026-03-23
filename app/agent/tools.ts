@@ -1,119 +1,99 @@
-import { tool, webSearchTool } from '@openai/agents';
-import { z } from 'zod';
-import { createPendingToolCall } from '@/agent/store';
-import { BulkAddCardsSchema, CardInputSchema, CreateDeckSchema, EditCardSchema, MultiEditCardSchema, ViewDeckSchema } from '@/agent/schemas';
+import { openai } from '@ai-sdk/openai';
+import { tool } from 'ai';
+import { executeApprovedToolCall } from '@/agent/approval';
+import { BulkAddCardsSchema, CardInputSchema, CreateDeckSchema, EditCardSchema, MultiEditCardSchema, RemoveCardSchema, ViewAllDecksSchema, ViewDeckSchema } from '@/agent/schemas';
 import { fetchDeckByIdAction, fetchDecksAction } from '@/actions/decks';
 import { fetchDeckCardsAction } from '@/actions/cards';
 
 interface CreateAgentToolsOptions {
-    sessionId: string;
-    userMessageId: string;
-    includeWebSearch: boolean;
+    token: string | undefined;
 }
 
-export function createAgentTools({
-    sessionId,
-    userMessageId,
-    includeWebSearch,
-}: CreateAgentToolsOptions) {
+export function createAgentTools({ token }: CreateAgentToolsOptions) {
     const addCardTool = tool({
-        name: 'AddCard',
         description: 'Add a card to a deck. Supports rich card types: flip, type_in, multiple_choice, map_select.',
-        parameters: CardInputSchema,
-        execute: async (args: unknown) => {
-            const pendingId = await createPendingToolCall(sessionId, userMessageId, 'AddCard', args);
-            return { pendingApproval: true, toolCallId: pendingId };
+        inputSchema: CardInputSchema,
+        needsApproval: true,
+        execute: async (args) => {
+            return executeApprovedToolCall('AddCard', args, token);
         },
     });
 
     const editCardTool = tool({
-        name: 'EditCard',
         description: 'Edit a card in a deck. Can update text, answer mode, choices, and other rich fields.',
-        parameters: EditCardSchema,
-        execute: async (args: unknown) => {
-            const pendingId = await createPendingToolCall(sessionId, userMessageId, 'EditCard', args);
-            return { pendingApproval: true, toolCallId: pendingId };
+        inputSchema: EditCardSchema,
+        needsApproval: true,
+        execute: async (args) => {
+            return executeApprovedToolCall('EditCard', args, token);
         },
     });
 
     const multiEditCardTool = tool({
-        name: 'MultiEditCard',
         description: 'Apply multiple edits to cards within a deck. Each edit can update text and rich card fields.',
-        parameters: MultiEditCardSchema,
-        execute: async (args: unknown) => {
-            const pendingId = await createPendingToolCall(sessionId, userMessageId, 'MultiEditCard', args);
-            return { pendingApproval: true, toolCallId: pendingId };
+        inputSchema: MultiEditCardSchema,
+        needsApproval: true,
+        execute: async (args) => {
+            return executeApprovedToolCall('MultiEditCard', args, token);
         },
     });
 
     const bulkAddCardsTool = tool({
-        name: 'BulkAddCards',
         description: 'Add multiple cards to an existing deck at once. Use this when adding more than 2 cards to a deck.',
-        parameters: BulkAddCardsSchema,
-        execute: async (args: unknown) => {
-            const pendingId = await createPendingToolCall(sessionId, userMessageId, 'BulkAddCards', args);
-            return { pendingApproval: true, toolCallId: pendingId };
+        inputSchema: BulkAddCardsSchema,
+        needsApproval: true,
+        execute: async (args) => {
+            return executeApprovedToolCall('BulkAddCards', args, token);
         },
     });
 
     const removeCardTool = tool({
-        name: 'RemoveCard',
         description: 'Remove a card from a deck.',
-        parameters: z.object({
-            deckId: z.string(),
-            cardId: z.string(),
-        }).strict(),
-        execute: async (args: unknown) => {
-            const pendingId = await createPendingToolCall(sessionId, userMessageId, 'RemoveCard', args);
-            return { pendingApproval: true, toolCallId: pendingId };
+        inputSchema: RemoveCardSchema,
+        needsApproval: true,
+        execute: async (args) => {
+            return executeApprovedToolCall('RemoveCard', args, token);
         },
     });
 
     const createDeckTool = tool({
-        name: 'CreateDeck',
         description: 'Create a new deck with a list of cards.',
-        parameters: CreateDeckSchema,
-        execute: async (args: unknown) => {
-            const pendingId = await createPendingToolCall(sessionId, userMessageId, 'CreateDeck', args);
-            return { pendingApproval: true, toolCallId: pendingId };
+        inputSchema: CreateDeckSchema,
+        needsApproval: true,
+        execute: async (args) => {
+            return executeApprovedToolCall('CreateDeck', args, token);
         },
     });
 
     const viewDeckTool = tool({
-        name: 'ViewDeck',
         description: 'View a deck and its cards by deckId.',
-        parameters: ViewDeckSchema,
-        execute: async (args: unknown) => {
-            const parsed = ViewDeckSchema.safeParse(args);
-            if (!parsed.success) {
-                return { success: false, message: parsed.error.message };
-            }
-
-            const deckRes = await fetchDeckByIdAction(parsed.data.deckId);
-            const cardsRes = await fetchDeckCardsAction(parsed.data.deckId);
+        inputSchema: ViewDeckSchema,
+        execute: async ({ deckId }) => {
+            const deckRes = await fetchDeckByIdAction(deckId);
+            const cardsRes = await fetchDeckCardsAction(deckId);
             return { deck: deckRes.deck, cards: cardsRes.cards };
         },
     });
 
     const viewAllDecksTool = tool({
-        name: 'ViewAllDecks',
         description: 'List all decks with their ids and names.',
-        parameters: z.object({}).strict(),
+        inputSchema: ViewAllDecksSchema,
         execute: async () => {
             const res = await fetchDecksAction();
             return { decks: (res.decks || []).map((deck) => ({ id: deck.id, name: deck.name })) };
         },
     });
 
-    return [
-        ...(includeWebSearch ? [webSearchTool({ searchContextSize: 'medium' })] : []),
-        createDeckTool,
-        addCardTool,
-        bulkAddCardsTool,
-        editCardTool,
-        multiEditCardTool,
-        removeCardTool,
-        viewDeckTool,
-        viewAllDecksTool,
-    ];
+    return {
+        web_search: openai.tools.webSearch({
+            searchContextSize: 'medium',
+        }),
+        CreateDeck: createDeckTool,
+        AddCard: addCardTool,
+        BulkAddCards: bulkAddCardsTool,
+        EditCard: editCardTool,
+        MultiEditCard: multiEditCardTool,
+        RemoveCard: removeCardTool,
+        ViewDeck: viewDeckTool,
+        ViewAllDecks: viewAllDecksTool,
+    };
 }

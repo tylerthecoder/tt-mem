@@ -1,23 +1,39 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useChat } from '@ai-sdk/react';
+import {
+    DefaultChatTransport,
+    lastAssistantMessageIsCompleteWithApprovalResponses,
+    type UIMessage,
+} from 'ai';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname } from 'next/navigation';
 import {
-    approveToolCallAction,
     createAIChatSessionAction,
     getAIChatMessagesAction,
-    getPendingToolCallsAction,
     listAIChatSessionsAction,
-    sendAIChatMessageAction,
 } from '@/agent/chatActions';
 import { useAuth } from '@/context/useAuth';
-import type { AIChatMessage, AIChatSession } from '@/types';
+import type { AIChatSession } from '@/types';
 
 const aiChatKeys = {
     sessions: ['aiChat', 'sessions'] as const,
     messages: (sessionId: string | undefined) => ['aiChat', 'messages', sessionId] as const,
-    pending: (sessionId: string | undefined) => ['aiChat', 'pending', sessionId] as const,
+};
+
+type ToolUIPart = {
+    type: string;
+    state?: string;
+    toolCallId?: string;
+    input?: unknown;
+    output?: unknown;
+    errorText?: string;
+    approval?: {
+        id: string;
+        approved?: boolean;
+        reason?: string;
+    };
 };
 
 function useCreateAIChatSessionMutation() {
@@ -60,7 +76,7 @@ function useAIChatSessions() {
 function useAIChatMessages(sessionId: string | undefined) {
     const { token } = useAuth();
 
-    return useQuery<AIChatMessage[], Error>({
+    return useQuery<UIMessage[], Error>({
         queryKey: aiChatKeys.messages(sessionId),
         queryFn: async () => {
             if (!sessionId) {
@@ -79,72 +95,6 @@ function useAIChatMessages(sessionId: string | undefined) {
     });
 }
 
-function useSendAIChatMessageMutation(sessionId: string) {
-    const queryClient = useQueryClient();
-    const { token } = useAuth();
-
-    return useMutation<
-        { assistantText?: string; pendingToolCalls?: { id: string; name: string; arguments: unknown }[] },
-        Error,
-        { text: string; pageUrl?: string }
-    >({
-        mutationFn: async ({ text, pageUrl }) => {
-            const res = await sendAIChatMessageAction(sessionId, text, token ?? undefined, pageUrl);
-            if (!res.success) {
-                throw new Error(res.message || 'Failed to send');
-            }
-
-            return { assistantText: res.assistantText, pendingToolCalls: res.pendingToolCalls };
-        },
-        onSettled: () => {
-            queryClient.invalidateQueries({ queryKey: aiChatKeys.sessions });
-            queryClient.invalidateQueries({ queryKey: aiChatKeys.messages(sessionId) });
-            queryClient.invalidateQueries({ queryKey: aiChatKeys.pending(sessionId) });
-        },
-    });
-}
-
-function usePendingToolCalls(sessionId: string | undefined) {
-    const { token } = useAuth();
-
-    return useQuery<{ id: string; name: string; arguments: unknown }[], Error>({
-        queryKey: aiChatKeys.pending(sessionId),
-        queryFn: async () => {
-            if (!sessionId) {
-                throw new Error('Session id required');
-            }
-
-            const res = await getPendingToolCallsAction(sessionId, token ?? undefined);
-            if (!res.success || !res.toolCalls) {
-                throw new Error(res.message || 'Failed to load pending tool calls');
-            }
-
-            return res.toolCalls;
-        },
-        enabled: !!sessionId && !!token,
-        staleTime: 0,
-    });
-}
-
-function useApproveToolCallMutation(sessionId: string) {
-    const queryClient = useQueryClient();
-    const { token } = useAuth();
-
-    return useMutation<void, Error, { toolCallId: string; approve: boolean }>({
-        mutationFn: async ({ toolCallId, approve }) => {
-            const res = await approveToolCallAction(sessionId, toolCallId, approve, token ?? undefined);
-            if (!res.success) {
-                throw new Error(res.message || 'Failed to approve tool');
-            }
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: aiChatKeys.sessions });
-            queryClient.invalidateQueries({ queryKey: aiChatKeys.messages(sessionId) });
-            queryClient.invalidateQueries({ queryKey: aiChatKeys.pending(sessionId) });
-        },
-    });
-}
-
 function formatSessionTime(value: Date | string) {
     return new Date(value).toLocaleString([], {
         month: 'short',
@@ -154,134 +104,890 @@ function formatSessionTime(value: Date | string) {
     });
 }
 
-function ToolCallCard({
-    tc,
-    autoApprove,
-    sessionId,
-}: {
-    tc: { id: string; name: string; arguments: unknown };
-    autoApprove: boolean;
-    sessionId: string;
-}) {
-    const approveMutation = useApproveToolCallMutation(sessionId);
-    const [expanded, setExpanded] = useState(false);
-    const [handled, setHandled] = useState(false);
-    const autoApprovedRef = useRef(false);
+function getMessageText(message: UIMessage) {
+    return message.parts
+        .filter((part) => part.type === 'text')
+        .map((part) => part.text)
+        .join('\n')
+        .trim();
+}
 
-    useEffect(() => {
-        if (autoApprove && !handled && !autoApprovedRef.current) {
-            autoApprovedRef.current = true;
-            approveMutation.mutate(
-                { toolCallId: tc.id, approve: true },
-                { onSuccess: () => setHandled(true) }
+function getToolParts(message: UIMessage): ToolUIPart[] {
+    return message.parts.filter((part) => part.type.startsWith('tool-')) as ToolUIPart[];
+}
+
+function prettifyToolName(toolName: string) {
+    return toolName
+        .replace(/_/g, ' ')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return null;
+    }
+
+    return value as Record<string, unknown>;
+}
+
+function formatValue(value: unknown) {
+    if (value == null) return 'None';
+    if (Array.isArray(value)) return `${value.length} item${value.length === 1 ? '' : 's'}`;
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    return String(value);
+}
+
+function summarizeCard(card: Record<string, unknown>) {
+    const promptType = formatValue(card.prompt_type);
+    const answerType = formatValue(card.answer_type);
+    const promptContent = typeof card.prompt_content === 'string' ? card.prompt_content : '';
+    const answerContent = Array.isArray(card.answer_content)
+        ? card.answer_content.join(', ')
+        : typeof card.answer_content === 'string'
+            ? card.answer_content
+            : '';
+
+    return {
+        title: promptContent || 'Untitled card',
+        meta: `${promptType} -> ${answerType}`,
+        answer: answerContent || 'No answer content',
+    };
+}
+
+function ToolSection({
+    label,
+    value,
+}: {
+    label: string;
+    value: React.ReactNode;
+}) {
+    return (
+        <div className="grid grid-cols-[96px_1fr] gap-2">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-current/70">
+                {label}
+            </div>
+            <div className="min-w-0 text-gray-800">{value}</div>
+        </div>
+    );
+}
+
+function ToolCardList({
+    items,
+}: {
+    items: { title: string; subtitle?: string; detail?: string }[];
+}) {
+    return (
+        <div className="space-y-2">
+            {items.map((item, index) => (
+                <div key={`${item.title}-${index}`} className="rounded-lg border border-white/70 bg-white/80 p-2 text-gray-800">
+                    <div className="font-medium">{item.title}</div>
+                    {item.subtitle && <div className="mt-0.5 text-[11px] text-gray-600">{item.subtitle}</div>}
+                    {item.detail && <div className="mt-1 text-xs text-gray-700">{item.detail}</div>}
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function ToolPayloadPrettyView({
+    toolName,
+    payload,
+    mode,
+}: {
+    toolName: string;
+    payload: unknown;
+    mode: 'input' | 'output';
+}) {
+    const record = asRecord(payload);
+
+    if (toolName === 'ViewAllDecks' && mode === 'output') {
+        const decks = Array.isArray(record?.decks) ? record.decks : [];
+        return (
+            <ToolCardList
+                items={decks.map((deck) => {
+                    const item = asRecord(deck) ?? {};
+                    return {
+                        title: typeof item.name === 'string' ? item.name : 'Untitled deck',
+                        subtitle: typeof item.id === 'string' ? `Deck ID: ${item.id}` : undefined,
+                    };
+                })}
+            />
+        );
+    }
+
+    if (toolName === 'ViewDeck') {
+        if (mode === 'input') {
+            return <ToolSection label="Deck ID" value={formatValue(record?.deckId)} />;
+        }
+
+        const deck = asRecord(record?.deck);
+        const cards = Array.isArray(record?.cards) ? record.cards : [];
+        return (
+            <div className="space-y-3">
+                <ToolSection label="Deck" value={typeof deck?.name === 'string' ? deck.name : 'Unknown deck'} />
+                <ToolSection label="Deck ID" value={formatValue(deck?.id)} />
+                <ToolSection label="Cards" value={`${cards.length} total`} />
+                {cards.length > 0 && (
+                    <ToolCardList
+                        items={cards.slice(0, 4).map((card) => {
+                            const summary = summarizeCard(asRecord(card) ?? {});
+                            return {
+                                title: summary.title,
+                                subtitle: summary.meta,
+                                detail: summary.answer,
+                            };
+                        })}
+                    />
+                )}
+            </div>
+        );
+    }
+
+    if (toolName === 'CreateDeck') {
+        if (mode === 'input') {
+            const cards = Array.isArray(record?.cards) ? record.cards : [];
+            return (
+                <div className="space-y-3">
+                    <ToolSection label="Name" value={formatValue(record?.name)} />
+                    <ToolSection label="Cards" value={`${cards.length} to create`} />
+                    {cards.length > 0 && (
+                        <ToolCardList
+                            items={cards.slice(0, 4).map((card) => {
+                                const summary = summarizeCard(asRecord(card) ?? {});
+                                return {
+                                    title: summary.title,
+                                    subtitle: summary.meta,
+                                    detail: summary.answer,
+                                };
+                            })}
+                        />
+                    )}
+                </div>
             );
         }
-    }, [approveMutation, autoApprove, handled, tc.id]);
 
-    const handleApprove = () => {
-        approveMutation.mutate(
-            { toolCallId: tc.id, approve: true },
-            { onSuccess: () => setHandled(true) }
+        const deck = asRecord(record?.deck);
+        return (
+            <div className="space-y-3">
+                <ToolSection label="Deck" value={typeof deck?.name === 'string' ? deck.name : 'Created deck'} />
+                <ToolSection label="Deck ID" value={formatValue(deck?.id)} />
+                <ToolSection label="Cards created" value={formatValue(record?.cardsCreated)} />
+            </div>
         );
-    };
+    }
 
-    const handleReject = () => {
-        approveMutation.mutate(
-            { toolCallId: tc.id, approve: false },
-            { onSuccess: () => setHandled(true) }
+    if (toolName === 'AddCard') {
+        if (mode === 'input') {
+            const summary = summarizeCard(record ?? {});
+            return (
+                <div className="space-y-3">
+                    <ToolSection label="Deck ID" value={formatValue(record?.deckId)} />
+                    <ToolSection label="Card" value={summary.title} />
+                    <ToolSection label="Modes" value={summary.meta} />
+                    <ToolSection label="Answer" value={summary.answer} />
+                </div>
+            );
+        }
+
+        const summary = summarizeCard(record ?? {});
+        return (
+            <div className="space-y-3">
+                <ToolSection label="Card" value={summary.title} />
+                <ToolSection label="Card ID" value={formatValue(record?.id)} />
+                <ToolSection label="Modes" value={summary.meta} />
+            </div>
         );
-    };
+    }
+
+    if (toolName === 'BulkAddCards') {
+        if (mode === 'input') {
+            const cards = Array.isArray(record?.cards) ? record.cards : [];
+            return (
+                <div className="space-y-3">
+                    <ToolSection label="Deck ID" value={formatValue(record?.deckId)} />
+                    <ToolSection label="Cards" value={`${cards.length} to add`} />
+                    {cards.length > 0 && (
+                        <ToolCardList
+                            items={cards.slice(0, 4).map((card) => {
+                                const summary = summarizeCard(asRecord(card) ?? {});
+                                return {
+                                    title: summary.title,
+                                    subtitle: summary.meta,
+                                    detail: summary.answer,
+                                };
+                            })}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        return <ToolSection label="Added" value={`${formatValue(record?.cardsAdded)} cards`} />;
+    }
+
+    if (toolName === 'EditCard') {
+        if (mode === 'input') {
+            const changes = [
+                record?.prompt_content ? 'prompt' : null,
+                record?.answer_content ? 'answer' : null,
+                record?.prompt_type ? 'prompt type' : null,
+                record?.answer_type ? 'answer type' : null,
+                record?.correct_index != null ? 'correct index' : null,
+                record?.extra_context ? 'extra context' : null,
+            ].filter(Boolean).join(', ');
+
+            return (
+                <div className="space-y-3">
+                    <ToolSection label="Deck ID" value={formatValue(record?.deckId)} />
+                    <ToolSection label="Card ID" value={formatValue(record?.cardId)} />
+                    <ToolSection label="Changes" value={changes || 'No visible changes'} />
+                </div>
+            );
+        }
+
+        const summary = summarizeCard(record ?? {});
+        return (
+            <div className="space-y-3">
+                <ToolSection label="Card" value={summary.title} />
+                <ToolSection label="Card ID" value={formatValue(record?.id)} />
+                <ToolSection label="Modes" value={summary.meta} />
+            </div>
+        );
+    }
+
+    if (toolName === 'MultiEditCard') {
+        if (mode === 'input') {
+            const edits = Array.isArray(record?.edits) ? record.edits : [];
+            return (
+                <div className="space-y-3">
+                    <ToolSection label="Deck ID" value={formatValue(record?.deckId)} />
+                    <ToolSection label="Edits" value={`${edits.length} cards`} />
+                    {edits.length > 0 && (
+                        <ToolCardList
+                            items={edits.slice(0, 4).map((edit) => {
+                                const item = asRecord(edit) ?? {};
+                                return {
+                                    title: `Card ${formatValue(item.cardId)}`,
+                                    detail: [
+                                        item.prompt_content ? 'prompt' : null,
+                                        item.answer_content ? 'answer' : null,
+                                        item.prompt_type ? 'prompt type' : null,
+                                        item.answer_type ? 'answer type' : null,
+                                    ].filter(Boolean).join(', ') || 'Update fields',
+                                };
+                            })}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        const outcomes = Array.isArray(payload) ? payload : [];
+        return (
+            <ToolCardList
+                items={outcomes.map((outcome) => {
+                    const item = asRecord(outcome) ?? {};
+                    return {
+                        title: `Card ${formatValue(item.cardId)}`,
+                        subtitle: item.success ? 'Updated successfully' : 'Update failed',
+                        detail: typeof item.message === 'string' ? item.message : undefined,
+                    };
+                })}
+            />
+        );
+    }
+
+    if (toolName === 'RemoveCard') {
+        if (mode === 'input') {
+            return (
+                <div className="space-y-3">
+                    <ToolSection label="Deck ID" value={formatValue(record?.deckId)} />
+                    <ToolSection label="Card ID" value={formatValue(record?.cardId)} />
+                </div>
+            );
+        }
+
+        return <ToolSection label="Result" value={formatValue(payload)} />;
+    }
+
+    if (toolName === 'web_search') {
+        const searchQuery = typeof record?.action === 'object'
+            ? asRecord(record.action)?.query
+            : record?.query;
+        const sources = Array.isArray(record?.sources) ? record.sources : [];
+
+        return (
+            <div className="space-y-3">
+                {searchQuery != null && <ToolSection label="Query" value={formatValue(searchQuery)} />}
+                {sources.length > 0 && (
+                    <ToolCardList
+                        items={sources.slice(0, 5).map((source) => {
+                            const item = asRecord(source) ?? {};
+                            return {
+                                title: typeof item.title === 'string'
+                                    ? item.title
+                                    : typeof item.url === 'string'
+                                        ? item.url
+                                        : 'Source',
+                                subtitle: typeof item.url === 'string' ? item.url : undefined,
+                            };
+                        })}
+                    />
+                )}
+            </div>
+        );
+    }
+
+    if (toolName === 'ViewAllDecks' && mode === 'input') {
+        return <ToolSection label="Action" value="List all decks" />;
+    }
+
+    if (typeof payload === 'string') {
+        return <div className="text-gray-800">{payload}</div>;
+    }
+
+    if (record) {
+        return (
+            <div className="space-y-2">
+                {Object.entries(record).slice(0, 8).map(([key, value]) => (
+                    <ToolSection key={key} label={key} value={formatValue(value)} />
+                ))}
+            </div>
+        );
+    }
+
+    if (Array.isArray(payload)) {
+        return (
+            <ToolCardList
+                items={payload.slice(0, 6).map((item, index) => ({
+                    title: `Item ${index + 1}`,
+                    detail: typeof item === 'string' ? item : JSON.stringify(item),
+                }))}
+            />
+        );
+    }
+
+    return <div className="text-gray-700">No details available.</div>;
+}
+
+function ToolCardFrame({
+    tone,
+    statusLabel,
+    toolName,
+    payload,
+    mode,
+    errorText,
+    children,
+}: {
+    tone: 'warning' | 'success' | 'error' | 'neutral';
+    statusLabel: string;
+    toolName: string;
+    payload: unknown;
+    mode: 'input' | 'output';
+    errorText?: string;
+    children?: React.ReactNode;
+}) {
+    const [showRawJson, setShowRawJson] = useState(false);
+
+    const toneClassName = {
+        warning: 'border-amber-300 bg-amber-50 text-amber-950',
+        success: 'border-green-300 bg-green-50 text-green-900',
+        error: 'border-red-300 bg-red-50 text-red-900',
+        neutral: 'border-gray-200 bg-gray-50 text-gray-900',
+    }[tone];
 
     return (
-        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm shadow-sm">
+        <div className={`rounded-xl border p-3 text-sm shadow-sm ${toneClassName}`}>
             <div className="flex items-start justify-between gap-3">
                 <div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                        Pending action
+                    <div className="text-xs font-semibold uppercase tracking-wide text-current/70">
+                        {statusLabel}
                     </div>
-                    <div className="mt-1 font-semibold text-amber-950">{tc.name}</div>
+                    <div className="mt-1 font-semibold">{prettifyToolName(toolName)}</div>
                 </div>
                 <button
                     type="button"
-                    className="text-xs text-amber-700 hover:text-amber-900"
-                    onClick={() => setExpanded((prev) => !prev)}
+                    className="text-xs text-current/80 hover:text-current"
+                    onClick={() => setShowRawJson((prev) => !prev)}
                 >
-                    {expanded ? 'Hide' : 'Show'} args
+                    {showRawJson ? 'Show pretty view' : 'Show raw JSON'}
                 </button>
             </div>
-            {expanded && (
-                <pre className="mt-2 max-h-40 overflow-auto rounded-lg border border-amber-200 bg-white p-2 text-xs text-gray-700">
-                    {JSON.stringify(tc.arguments, null, 2)}
-                </pre>
-            )}
-            {handled || autoApprovedRef.current ? (
-                <div className="mt-2 text-xs font-medium text-green-700">
-                    {autoApprove ? 'Auto-accepted' : 'Accepted'}
+            {errorText && <div className="mt-2 text-xs">{errorText}</div>}
+            <div className="mt-3">
+                {showRawJson ? (
+                    <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-white/70 bg-white/80 p-2 text-xs text-gray-700">
+                        {typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2)}
+                    </pre>
+                ) : (
+                    <div className="space-y-3">
+                        <ToolPayloadPrettyView toolName={toolName} payload={payload} mode={mode} />
+                        {children}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+function ToolResultCard({
+    toolName,
+    output,
+    errorText,
+}: {
+    toolName: string;
+    output?: unknown;
+    errorText?: string;
+}) {
+    const isError = Boolean(errorText);
+
+    return (
+        <ToolCardFrame
+            tone={isError ? 'error' : 'success'}
+            statusLabel={isError ? 'Action error' : 'Action result'}
+            toolName={toolName}
+            payload={output}
+            mode="output"
+            errorText={errorText}
+        />
+    );
+}
+
+function ToolApprovalCard({
+    toolName,
+    input,
+    approvalId,
+    autoApprove,
+    addToolApprovalResponse,
+}: {
+    toolName: string;
+    input: unknown;
+    approvalId: string;
+    autoApprove: boolean;
+    addToolApprovalResponse: (response: { id: string; approved: boolean; reason?: string }) => void | PromiseLike<void>;
+}) {
+    const [decision, setDecision] = useState<'accepted' | 'rejected' | 'auto-accepted' | null>(null);
+    const autoApprovedRef = useRef(false);
+
+    useEffect(() => {
+        if (autoApprove && !decision && !autoApprovedRef.current) {
+            autoApprovedRef.current = true;
+            Promise.resolve(addToolApprovalResponse({ id: approvalId, approved: true }))
+                .then(() => setDecision('auto-accepted'))
+                .catch(() => {
+                    autoApprovedRef.current = false;
+                    setDecision(null);
+                });
+        }
+    }, [addToolApprovalResponse, approvalId, autoApprove, decision]);
+
+    const handleApprove = () => {
+        Promise.resolve(addToolApprovalResponse({ id: approvalId, approved: true }))
+            .then(() => setDecision('accepted'))
+            .catch(() => {
+                setDecision(null);
+            });
+    };
+
+    const handleReject = () => {
+        Promise.resolve(addToolApprovalResponse({ id: approvalId, approved: false }))
+            .then(() => setDecision('rejected'))
+            .catch(() => {
+                setDecision(null);
+            });
+    };
+
+    return (
+        <ToolCardFrame
+            tone="warning"
+            statusLabel="Pending action"
+            toolName={toolName}
+            payload={input}
+            mode="input"
+        >
+            {decision ? (
+                <div
+                    className={`text-xs font-medium ${
+                        decision === 'rejected' ? 'text-red-700' : 'text-green-700'
+                    }`}
+                >
+                    {decision === 'auto-accepted'
+                        ? 'Auto-accepted'
+                        : decision === 'rejected'
+                            ? 'Rejected'
+                            : 'Accepted'}
                 </div>
             ) : (
-                <div className="mt-3 flex gap-2">
+                <div className="flex gap-2">
                     <button
                         type="button"
-                        className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                        className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700"
                         onClick={handleApprove}
-                        disabled={approveMutation.isPending}
                     >
                         Accept
                     </button>
                     <button
                         type="button"
-                        className="rounded-md bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600 disabled:opacity-50"
+                        className="rounded-md bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600"
                         onClick={handleReject}
-                        disabled={approveMutation.isPending}
                     >
                         Reject
                     </button>
                 </div>
             )}
+        </ToolCardFrame>
+    );
+}
+
+const THINKING_PHASES = [
+    'Thinking...',
+    'Working on it...',
+    'Running tools...',
+    'Still processing...',
+    'Crunching data...',
+    'Almost there...',
+];
+
+function ThinkingIndicator() {
+    const [elapsed, setElapsed] = useState(0);
+    const [phaseIndex, setPhaseIndex] = useState(0);
+
+    useEffect(() => {
+        const timer = setInterval(() => setElapsed((e) => e + 1), 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    useEffect(() => {
+        if (elapsed > 0 && elapsed % 6 === 0) {
+            setPhaseIndex((i) => Math.min(i + 1, THINKING_PHASES.length - 1));
+        }
+    }, [elapsed]);
+
+    const formatTime = (seconds: number) => {
+        if (seconds < 60) return `${seconds}s`;
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    };
+
+    return (
+        <div className="text-left">
+            <div className="inline-flex items-center gap-2.5 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500 shadow-sm">
+                <span className="flex gap-[3px]">
+                    <span className="inline-block h-[6px] w-[6px] animate-bounce rounded-full bg-gray-400 [animation-delay:0ms]" />
+                    <span className="inline-block h-[6px] w-[6px] animate-bounce rounded-full bg-gray-400 [animation-delay:150ms]" />
+                    <span className="inline-block h-[6px] w-[6px] animate-bounce rounded-full bg-gray-400 [animation-delay:300ms]" />
+                </span>
+                <span>{THINKING_PHASES[phaseIndex]}</span>
+                <span className="tabular-nums text-xs text-gray-400">{formatTime(elapsed)}</span>
+            </div>
         </div>
     );
 }
 
-function ToolResultCard({ content }: { content: string }) {
-    let parsed: { tool?: string; result?: unknown; error?: string } | null = null;
+function renderToolPart(
+    part: ToolUIPart,
+    messageId: string,
+    autoApprove: boolean,
+    addToolApprovalResponse: (response: { id: string; approved: boolean; reason?: string }) => void | PromiseLike<void>,
+) {
+    const toolName = part.type.replace(/^tool-/, '');
+    const key = part.toolCallId || `${messageId}-${toolName}`;
 
-    try {
-        parsed = JSON.parse(content);
-    } catch {
-        parsed = null;
+    if (part.state === 'approval-requested' && part.approval?.id) {
+        return (
+            <ToolApprovalCard
+                key={key}
+                toolName={toolName}
+                input={part.input}
+                approvalId={part.approval.id}
+                autoApprove={autoApprove}
+                addToolApprovalResponse={addToolApprovalResponse}
+            />
+        );
     }
 
-    if (!parsed) {
-        return <div className="text-xs italic text-gray-500">{content}</div>;
+    if (part.state === 'output-available') {
+        return (
+            <ToolResultCard
+                key={key}
+                toolName={toolName}
+                output={part.output}
+            />
+        );
     }
 
-    const isError = Boolean(parsed.error);
+    if (part.state === 'output-error') {
+        return (
+            <ToolResultCard
+                key={key}
+                toolName={toolName}
+                errorText={part.errorText || 'Tool execution failed'}
+            />
+        );
+    }
 
+    if (part.state === 'approval-responded' && part.approval?.id) {
+        const wasApproved = part.approval.approved !== false;
+        return (
+            <ToolCardFrame
+                key={key}
+                tone={wasApproved ? 'neutral' : 'error'}
+                statusLabel={wasApproved ? 'Action approved' : 'Action rejected'}
+                toolName={toolName}
+                payload={part.input}
+                mode="input"
+            >
+                {part.approval.reason && (
+                    <div className="text-xs text-current/80">
+                        Reason: {part.approval.reason}
+                    </div>
+                )}
+            </ToolCardFrame>
+        );
+    }
+
+    if (part.state === 'output-denied' && part.approval?.id) {
+        return (
+            <ToolCardFrame
+                key={key}
+                tone="error"
+                statusLabel="Action rejected"
+                toolName={toolName}
+                payload={part.input}
+                mode="input"
+            >
+                <div className="text-xs text-current/80">
+                    {part.approval.reason || 'This action was rejected and was not executed.'}
+                </div>
+            </ToolCardFrame>
+        );
+    }
+
+    if (part.state === 'input-available' || part.state === 'input-streaming') {
+        return (
+            <ToolCardFrame
+                key={key}
+                tone="neutral"
+                statusLabel="Preparing action"
+                toolName={toolName}
+                payload={part.input}
+                mode="input"
+            />
+        );
+    }
+
+    return null;
+}
+
+function MessageList({
+    messages,
+    autoApprove,
+    addToolApprovalResponse,
+}: {
+    messages: UIMessage[];
+    autoApprove: boolean;
+    addToolApprovalResponse: (response: { id: string; approved: boolean; reason?: string }) => void | PromiseLike<void>;
+}) {
     return (
-        <div
-            className={`rounded-xl border p-3 text-xs shadow-sm ${
-                isError
-                    ? 'border-red-300 bg-red-50 text-red-800'
-                    : 'border-green-300 bg-green-50 text-green-800'
-            }`}
-        >
-            <div className="font-semibold">
-                {isError ? 'Action error' : 'Action result'}: {parsed.tool}
-            </div>
-            {parsed.error && <div className="mt-1">{parsed.error}</div>}
-            {parsed.result != null && (
-                <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-white/80 p-2 text-xs">
-                    {typeof parsed.result === 'string'
-                        ? parsed.result
-                        : JSON.stringify(parsed.result, null, 2)}
-                </pre>
-            )}
-        </div>
+        <>
+            {messages.map((message) => {
+                const textContent = getMessageText(message);
+                const toolParts = getToolParts(message);
+                const shouldRenderToolsFirst = message.role === 'assistant' && toolParts.length > 0;
+
+                return (
+                    <div key={message.id} className="space-y-2">
+                        {(shouldRenderToolsFirst ? toolParts : []).map((part) =>
+                            renderToolPart(part, message.id, autoApprove, addToolApprovalResponse)
+                        )}
+
+                        {textContent && (
+                            <div className={message.role === 'user' ? 'text-right' : 'text-left'}>
+                                <div
+                                    className={`inline-block max-w-[88%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
+                                        message.role === 'user'
+                                            ? 'bg-primary text-white'
+                                            : 'border border-gray-200 bg-gray-50 text-gray-900'
+                                    }`}
+                                >
+                                    <pre className="whitespace-pre-wrap break-words font-sans">
+                                        {textContent}
+                                    </pre>
+                                </div>
+                            </div>
+                        )}
+
+                        {(!shouldRenderToolsFirst ? toolParts : []).map((part) =>
+                            renderToolPart(part, message.id, autoApprove, addToolApprovalResponse)
+                        )}
+                    </div>
+                );
+            })}
+        </>
     );
 }
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform);
 const shortcutLabel = isMac ? '⌘K' : 'Ctrl+K';
+
+function ChatConversation({
+    sessionId,
+    initialMessages,
+    pathname,
+    token,
+    autoApprove,
+    onSessionUpdated,
+}: {
+    sessionId: string;
+    initialMessages: UIMessage[];
+    pathname: string | null;
+    token: string;
+    autoApprove: boolean;
+    onSessionUpdated: () => void;
+}) {
+    const [input, setInput] = useState('');
+    const inputRef = useRef<HTMLTextAreaElement | null>(null);
+    const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+    const messagesEndRef = useRef<HTMLDivElement | null>(null);
+    const shouldAutoScrollRef = useRef(true);
+
+    const transport = useMemo(
+        () =>
+            new DefaultChatTransport({
+                api: '/api/ai-chat',
+                body: {
+                    token,
+                    pageUrl: pathname ?? undefined,
+                },
+            }),
+        [pathname, token]
+    );
+
+    const {
+        messages,
+        sendMessage,
+        status,
+        error,
+        addToolApprovalResponse,
+    } = useChat({
+        id: sessionId,
+        messages: initialMessages,
+        transport,
+        sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+        onFinish: () => {
+            onSessionUpdated();
+        },
+    });
+
+    const isBusy = status === 'submitted' || status === 'streaming';
+
+    const updateAutoScrollState = () => {
+        const container = scrollContainerRef.current;
+        if (!container) {
+            return;
+        }
+
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        shouldAutoScrollRef.current = distanceFromBottom < 96;
+    };
+
+    useEffect(() => {
+        if (!shouldAutoScrollRef.current) {
+            return;
+        }
+
+        messagesEndRef.current?.scrollIntoView({
+            behavior: isBusy ? 'auto' : 'smooth',
+        });
+    }, [messages, isBusy]);
+
+    useEffect(() => {
+        window.setTimeout(() => inputRef.current?.focus(), 100);
+    }, [sessionId]);
+
+    useEffect(() => {
+        shouldAutoScrollRef.current = true;
+    }, [sessionId]);
+
+    const handleSend = () => {
+        const text = input.trim();
+        if (!text || isBusy) {
+            return;
+        }
+
+        void sendMessage({ text });
+        setInput('');
+    };
+
+    return (
+        <>
+            <div
+                ref={scrollContainerRef}
+                className="min-h-0 flex-1 overflow-y-auto bg-white px-4 py-4"
+                onScroll={updateAutoScrollState}
+            >
+                <div className="space-y-3">
+                    {messages.length === 0 && !isBusy && (
+                        <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+                            Start a chat to ask questions, inspect decks, or have the assistant prepare changes for approval.
+                        </div>
+                    )}
+
+                    <MessageList
+                        messages={messages}
+                        autoApprove={autoApprove}
+                        addToolApprovalResponse={addToolApprovalResponse}
+                    />
+
+                    {isBusy && <ThinkingIndicator />}
+
+                    {error && (
+                        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                            Error: {error.message || 'Something went wrong'}
+                        </div>
+                    )}
+
+                    <div ref={messagesEndRef} />
+                </div>
+            </div>
+
+            <div className="border-t border-gray-200 bg-white px-4 py-3">
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-2 shadow-sm">
+                    <textarea
+                        ref={inputRef}
+                        className="min-h-[88px] w-full resize-none bg-transparent px-2 py-2 text-sm text-gray-900 outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                        rows={4}
+                        placeholder={isBusy ? 'Agent is working...' : 'Ask about your decks or request changes...'}
+                        value={input}
+                        disabled={isBusy}
+                        onChange={(event) => setInput(event.target.value)}
+                        onKeyDown={(event) => {
+                            if (event.key === 'Enter' && !event.shiftKey) {
+                                event.preventDefault();
+                                handleSend();
+                            }
+                        }}
+                    />
+                    <div className="flex items-center justify-between gap-3 border-t border-gray-200 px-2 pt-2">
+                        <div className="text-xs text-gray-400">
+                            Enter to send, Shift+Enter for a new line
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleSend}
+                            disabled={isBusy || !input.trim()}
+                            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            Send
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </>
+    );
+}
 
 export default function AIChatWidget() {
     const { token, isAuthInitializing } = useAuth();
@@ -289,18 +995,19 @@ export default function AIChatWidget() {
     const [isOpen, setIsOpen] = useState(false);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [autoApprove, setAutoApprove] = useState(false);
-    const [input, setInput] = useState('');
     const [showSessionPicker, setShowSessionPicker] = useState(false);
-    const [optimisticMessage, setOptimisticMessage] = useState<string | null>(null);
-
-    const inputRef = useRef<HTMLTextAreaElement | null>(null);
-    const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
     const createSession = useCreateAIChatSessionMutation();
-    const { data: sessions, refetch: refetchSessions, isError: sessionsError, isPending: sessionsLoading } = useAIChatSessions();
-    const { data: messages } = useAIChatMessages(sessionId || undefined);
-    const sendMutation = useSendAIChatMessageMutation(sessionId || '');
-    const { data: pending } = usePendingToolCalls(sessionId || undefined);
+    const createSessionMutate = createSession.mutate;
+    const createSessionIsPending = createSession.isPending;
+    const queryClient = useQueryClient();
+    const {
+        data: sessions,
+        refetch: refetchSessions,
+        isError: sessionsError,
+        isPending: sessionsLoading,
+    } = useAIChatSessions();
+    const sessionMessagesQuery = useAIChatMessages(sessionId || undefined);
 
     const activeSession = useMemo(
         () => sessions?.find((session) => session.id === sessionId) ?? null,
@@ -320,15 +1027,11 @@ export default function AIChatWidget() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
-    const createSessionMutate = createSession.mutate;
-    const createSessionIsPending = createSession.isPending;
-
     useEffect(() => {
         if (!isOpen || !token || sessionId || createSessionIsPending) {
             return;
         }
 
-        // Wait while the sessions query is still in flight for the first time.
         if (sessionsLoading) {
             return;
         }
@@ -338,9 +1041,6 @@ export default function AIChatWidget() {
             return;
         }
 
-        // Create a session when the list is empty OR when fetching sessions
-        // failed (sessionsError) — this lets the UI recover from transient
-        // DB/network errors instead of staying stuck on "Starting chat...".
         if ((sessions && sessions.length === 0) || sessionsError) {
             createSessionMutate(undefined, {
                 onSuccess: (data) => {
@@ -351,46 +1051,10 @@ export default function AIChatWidget() {
         }
     }, [createSessionIsPending, createSessionMutate, isOpen, refetchSessions, sessionId, sessions, sessionsError, sessionsLoading, token]);
 
-    useEffect(() => {
-        if (!optimisticMessage || !messages?.length) {
-            return;
-        }
-
-        const userMessages = messages.filter((message) => message.role === 'user');
-        const latestUserMessage = userMessages[userMessages.length - 1];
-
-        if (latestUserMessage?.content === optimisticMessage) {
-            setOptimisticMessage(null);
-        }
-    }, [messages, optimisticMessage]);
-
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, optimisticMessage, pending, showSessionPicker]);
-
-    useEffect(() => {
-        if (isOpen && sessionId) {
-            window.setTimeout(() => inputRef.current?.focus(), 100);
-        }
-    }, [isOpen, sessionId]);
-
-    const handleSend = useCallback(() => {
-        const text = input.trim();
-        if (!text || !sessionId || sendMutation.isPending) {
-            return;
-        }
-
-        setOptimisticMessage(text);
-        sendMutation.mutate({ text, pageUrl: pathname ?? undefined });
-        setInput('');
-    }, [input, pathname, sendMutation, sessionId]);
-
     const handleNewChat = () => {
         createSession.mutate(undefined, {
             onSuccess: (data) => {
                 setSessionId(data.id);
-                setInput('');
-                setOptimisticMessage(null);
                 setShowSessionPicker(false);
                 refetchSessions();
             },
@@ -400,6 +1064,11 @@ export default function AIChatWidget() {
     const handleSelectSession = (id: string) => {
         setSessionId(id);
         setShowSessionPicker(false);
+    };
+
+    const refreshChatState = () => {
+        void refetchSessions();
+        void queryClient.invalidateQueries({ queryKey: aiChatKeys.messages(sessionId || undefined) });
     };
 
     if (isAuthInitializing || !token) {
@@ -509,7 +1178,7 @@ export default function AIChatWidget() {
                                                             className={`w-full rounded-lg px-3 py-2 text-left text-sm ${
                                                                 session.id === sessionId
                                                                     ? 'bg-primary/10 text-primary'
-                                                                    : 'hover:bg-gray-50 text-gray-700'
+                                                                    : 'text-gray-700 hover:bg-gray-50'
                                                             }`}
                                                             onClick={() => handleSelectSession(session.id)}
                                                         >
@@ -542,143 +1211,63 @@ export default function AIChatWidget() {
                             </div>
                         </div>
 
-                        <div className="min-h-0 flex-1 overflow-y-auto bg-white px-4 py-4">
-                            <div className="space-y-3">
-                                {!sessionId && !createSession.isError && (
-                                    <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
-                                        Starting chat...
-                                    </div>
-                                )}
-
-                                {!sessionId && createSession.isError && (
-                                    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-6 text-center text-sm text-red-700">
-                                        <div className="font-medium">Failed to start chat</div>
-                                        <div className="mt-1 text-xs text-red-500">
-                                            {createSession.error?.message || 'Could not connect. Check that the server is running.'}
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => createSession.mutate(undefined, {
-                                                onSuccess: (data) => {
-                                                    setSessionId(data.id);
-                                                    refetchSessions();
-                                                },
-                                            })}
-                                            className="mt-3 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
-                                        >
-                                            Retry
-                                        </button>
-                                    </div>
-                                )}
-
-                                {sessionId && !messages?.length && !optimisticMessage && !sendMutation.isPending && (
-                                    <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
-                                        Start a chat to ask questions, inspect decks, or have the assistant prepare changes for approval.
-                                    </div>
-                                )}
-
-                                {sessionId && pending && pending.length > 0 && (
-                                    <div className="space-y-2">
-                                        {pending.map((toolCall) => (
-                                            <ToolCallCard
-                                                key={toolCall.id}
-                                                tc={toolCall}
-                                                autoApprove={autoApprove}
-                                                sessionId={sessionId}
-                                            />
-                                        ))}
-                                    </div>
-                                )}
-
-                                {sessionId &&
-                                    messages?.map((message) => {
-                                        if (message.role === 'tool') {
-                                            return <ToolResultCard key={message.id} content={message.content} />;
-                                        }
-
-                                        if (message.role === 'system') {
-                                            return (
-                                                <div key={message.id} className="text-center text-xs italic text-gray-400">
-                                                    {message.content}
-                                                </div>
-                                            );
-                                        }
-
-                                        return (
-                                            <div key={message.id} className={message.role === 'user' ? 'text-right' : 'text-left'}>
-                                                <div
-                                                    className={`inline-block max-w-[88%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
-                                                        message.role === 'user'
-                                                            ? 'bg-primary text-white'
-                                                            : 'border border-gray-200 bg-gray-50 text-gray-900'
-                                                    }`}
-                                                >
-                                                    <pre className="whitespace-pre-wrap break-words font-sans">
-                                                        {message.content}
-                                                    </pre>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-
-                                {optimisticMessage && (
-                                    <div className="text-right">
-                                        <div className="inline-block max-w-[88%] rounded-2xl bg-primary px-4 py-3 text-sm text-white opacity-80 shadow-sm">
-                                            <pre className="whitespace-pre-wrap break-words font-sans">{optimisticMessage}</pre>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {sendMutation.isPending && (
-                                    <div className="text-left">
-                                        <div className="inline-block rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500 shadow-sm">
-                                            Thinking...
-                                        </div>
-                                    </div>
-                                )}
-
-                                {sendMutation.isError && (
-                                    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                                        Error: {sendMutation.error?.message || 'Something went wrong'}
-                                    </div>
-                                )}
-
-                                <div ref={messagesEndRef} />
-                            </div>
-                        </div>
-
-                        {sessionId && (
-                            <div className="border-t border-gray-200 bg-white px-4 py-3">
-                                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-2 shadow-sm">
-                                    <textarea
-                                        ref={inputRef}
-                                        className="min-h-[88px] w-full resize-none bg-transparent px-2 py-2 text-sm text-gray-900 outline-none"
-                                        rows={4}
-                                        placeholder="Ask about your decks or request changes..."
-                                        value={input}
-                                        onChange={(event) => setInput(event.target.value)}
-                                        onKeyDown={(event) => {
-                                            if (event.key === 'Enter' && !event.shiftKey) {
-                                                event.preventDefault();
-                                                handleSend();
-                                            }
-                                        }}
-                                    />
-                                    <div className="flex items-center justify-between gap-3 border-t border-gray-200 px-2 pt-2">
-                                        <div className="text-xs text-gray-400">
-                                            Enter to send, Shift+Enter for a new line
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={handleSend}
-                                            disabled={sendMutation.isPending || !input.trim()}
-                                            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                        >
-                                            Send
-                                        </button>
-                                    </div>
+                        {!sessionId && !createSession.isError && (
+                            <div className="flex min-h-0 flex-1 items-center justify-center px-4">
+                                <div className="w-full rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+                                    Starting chat...
                                 </div>
                             </div>
+                        )}
+
+                        {!sessionId && createSession.isError && (
+                            <div className="flex min-h-0 flex-1 items-center justify-center px-4">
+                                <div className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-6 text-center text-sm text-red-700">
+                                    <div className="font-medium">Failed to start chat</div>
+                                    <div className="mt-1 text-xs text-red-500">
+                                        {createSession.error?.message || 'Could not connect. Check that the server is running.'}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => createSession.mutate(undefined, {
+                                            onSuccess: (data) => {
+                                                setSessionId(data.id);
+                                                refetchSessions();
+                                            },
+                                        })}
+                                        className="mt-3 rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+                                    >
+                                        Retry
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {sessionId && sessionMessagesQuery.isPending && (
+                            <div className="flex min-h-0 flex-1 items-center justify-center px-4">
+                                <div className="w-full rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+                                    Loading chat...
+                                </div>
+                            </div>
+                        )}
+
+                        {sessionId && sessionMessagesQuery.isError && (
+                            <div className="flex min-h-0 flex-1 items-center justify-center px-4">
+                                <div className="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-6 text-center text-sm text-red-700">
+                                    Failed to load chat: {sessionMessagesQuery.error.message}
+                                </div>
+                            </div>
+                        )}
+
+                        {sessionId && sessionMessagesQuery.data && (
+                            <ChatConversation
+                                key={sessionId}
+                                sessionId={sessionId}
+                                initialMessages={sessionMessagesQuery.data}
+                                pathname={pathname}
+                                token={token}
+                                autoApprove={autoApprove}
+                                onSessionUpdated={refreshChatState}
+                            />
                         )}
                     </aside>
                 </>

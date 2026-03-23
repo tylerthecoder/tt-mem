@@ -1,8 +1,25 @@
+import type { UIMessage } from 'ai';
 import { ObjectId } from 'mongodb';
+import { MESSAGES_COLLECTION, SESSIONS_COLLECTION } from '@/agent/constants';
 import { connectToDatabase } from '@/lib/db';
-import { MESSAGES_COLLECTION, SESSIONS_COLLECTION, TOOL_CALLS_COLLECTION } from '@/agent/constants';
-import type { PendingToolCallSummary } from '@/agent/types';
-import type { AIChatMessage, AIChatMessageDocument, AIChatSession, AIChatSessionDocument, AIChatToolCall } from '@/types';
+import type { AIChatSession, AIChatSessionDocument } from '@/types';
+
+const CHAT_FORMAT_VERSION = 2 as const;
+
+interface StoredUIMessageDocument {
+    _id?: ObjectId;
+    session_id: ObjectId;
+    batch_id: string;
+    message_id: string;
+    position: number;
+    createdAt: Date;
+    updatedAt: Date;
+    message: UIMessage;
+}
+
+export function getAIChatFormatVersion() {
+    return CHAT_FORMAT_VERSION;
+}
 
 export function mapSession(doc: AIChatSessionDocument | null | undefined): AIChatSession | null {
     if (!doc || !doc._id) return null;
@@ -10,26 +27,21 @@ export function mapSession(doc: AIChatSessionDocument | null | undefined): AICha
         id: doc._id.toString(),
         user_id: doc.user_id,
         title: doc.title,
+        formatVersion: doc.formatVersion,
+        activeMessageBatchId: doc.activeMessageBatchId,
         createdAt: doc.createdAt,
         updatedAt: doc.updatedAt,
-    };
-}
-
-export function mapMessage(doc: AIChatMessageDocument | null | undefined): AIChatMessage | null {
-    if (!doc || !doc._id) return null;
-    return {
-        id: doc._id.toString(),
-        role: doc.role,
-        content: doc.content,
-        tool_calls: doc.tool_calls,
-        createdAt: doc.createdAt,
     };
 }
 
 export async function getOwnedSession(sessionId: string, userId: string) {
     const { db } = await connectToDatabase();
     const sessions = db.collection<AIChatSessionDocument>(SESSIONS_COLLECTION);
-    return sessions.findOne({ _id: new ObjectId(sessionId), user_id: userId });
+    return sessions.findOne({
+        _id: new ObjectId(sessionId),
+        user_id: userId,
+        formatVersion: CHAT_FORMAT_VERSION,
+    });
 }
 
 export async function touchSession(sessionId: string, updates?: Partial<AIChatSessionDocument>) {
@@ -41,62 +53,77 @@ export async function touchSession(sessionId: string, updates?: Partial<AIChatSe
     );
 }
 
-export async function persistMessage(
-    sessionId: string,
-    role: AIChatMessageDocument['role'],
-    content: string,
-    toolCalls?: AIChatToolCall[]
-) {
+export async function loadUIMessageHistory(sessionId: string): Promise<UIMessage[]> {
     const { db } = await connectToDatabase();
-    const messages = db.collection<AIChatMessageDocument>(MESSAGES_COLLECTION);
-    const doc: AIChatMessageDocument = {
-        session_id: new ObjectId(sessionId),
-        role,
-        content,
-        tool_calls: toolCalls,
-        createdAt: new Date(),
-    };
-    const res = await messages.insertOne(doc);
-    await touchSession(sessionId);
-    return res.insertedId.toString();
-}
-
-export async function createPendingToolCall(sessionId: string, messageId: string, name: string, args: unknown) {
-    const { db } = await connectToDatabase();
-    const toolCalls = db.collection(TOOL_CALLS_COLLECTION);
-    const res = await toolCalls.insertOne({
-        session_id: new ObjectId(sessionId),
-        message_id: new ObjectId(messageId),
-        name,
-        arguments: args,
-        approved: false,
-        createdAt: new Date(),
-    });
-    return res.insertedId.toString();
-}
-
-export async function listPendingToolCalls(sessionId: string): Promise<PendingToolCallSummary[]> {
-    const { db } = await connectToDatabase();
-    const toolCalls = db.collection<{
-        _id: ObjectId;
-        name: string;
-        arguments: unknown;
-        createdAt: Date;
-    }>(TOOL_CALLS_COLLECTION);
-    const list = await toolCalls
-        .find({ session_id: new ObjectId(sessionId), approved: false })
-        .sort({ createdAt: 1 })
+    const sessions = db.collection<AIChatSessionDocument>(SESSIONS_COLLECTION);
+    const messages = db.collection<StoredUIMessageDocument>(MESSAGES_COLLECTION);
+    const sessionObjectId = new ObjectId(sessionId);
+    const session = await sessions.findOne(
+        { _id: sessionObjectId },
+        { projection: { activeMessageBatchId: 1 } }
+    );
+    const docs = await messages
+        .find({
+            session_id: sessionObjectId,
+            ...(session?.activeMessageBatchId
+                ? { batch_id: session.activeMessageBatchId }
+                : {}),
+        })
+        .sort({ position: 1 })
         .toArray();
-    return list.map((call) => ({
-        id: call._id.toString(),
-        name: call.name,
-        arguments: call.arguments,
-        createdAt: call.createdAt,
-    }));
+
+    return docs.map((doc) => doc.message);
 }
 
-export async function loadMessageHistory(sessionId: string) {
+export async function replaceUIMessageHistory(sessionId: string, uiMessages: UIMessage[]) {
     const { db } = await connectToDatabase();
-    const messages = db.collection<AIChatMessageDocument>(MESSAGES_COLLECTION);
-    return messages.find({ session_id: new ObjectId(sessionId) }).sort({ createdAt: 1 }).toArray();
+    const sessions = db.collection<AIChatSessionDocument>(SESSIONS_COLLECTION);
+    const messages = db.collection<StoredUIMessageDocument>(MESSAGES_COLLECTION);
+    const sessionObjectId = new ObjectId(sessionId);
+    const now = new Date();
+    const nextBatchId = new ObjectId().toHexString();
+
+    if (uiMessages.length > 0) {
+        await messages.insertMany(
+            uiMessages.map((message, index) => ({
+                session_id: sessionObjectId,
+                batch_id: nextBatchId,
+                message_id: message.id,
+                position: index,
+                createdAt: now,
+                updatedAt: now,
+                message,
+            }))
+        );
+    }
+
+    await sessions.updateOne(
+        { _id: sessionObjectId },
+        uiMessages.length > 0
+            ? {
+                $set: {
+                    activeMessageBatchId: nextBatchId,
+                    updatedAt: now,
+                },
+            }
+            : {
+                $unset: {
+                    activeMessageBatchId: '',
+                },
+                $set: {
+                    updatedAt: now,
+                },
+            }
+    );
+
+    await messages.deleteMany(
+        uiMessages.length > 0
+            ? {
+                session_id: sessionObjectId,
+                batch_id: { $ne: nextBatchId },
+            }
+            : {
+                session_id: sessionObjectId,
+            }
+    );
 }
