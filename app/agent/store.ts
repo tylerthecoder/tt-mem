@@ -9,6 +9,7 @@ const CHAT_FORMAT_VERSION = 2 as const;
 interface StoredUIMessageDocument {
     _id?: ObjectId;
     session_id: ObjectId;
+    batch_id: string;
     message_id: string;
     position: number;
     createdAt: Date;
@@ -27,6 +28,7 @@ export function mapSession(doc: AIChatSessionDocument | null | undefined): AICha
         user_id: doc.user_id,
         title: doc.title,
         formatVersion: doc.formatVersion,
+        activeMessageBatchId: doc.activeMessageBatchId,
         createdAt: doc.createdAt,
         updatedAt: doc.updatedAt,
     };
@@ -53,10 +55,19 @@ export async function touchSession(sessionId: string, updates?: Partial<AIChatSe
 
 export async function loadUIMessageHistory(sessionId: string): Promise<UIMessage[]> {
     const { db } = await connectToDatabase();
+    const sessions = db.collection<AIChatSessionDocument>(SESSIONS_COLLECTION);
     const messages = db.collection<StoredUIMessageDocument>(MESSAGES_COLLECTION);
+    const sessionObjectId = new ObjectId(sessionId);
+    const session = await sessions.findOne(
+        { _id: sessionObjectId },
+        { projection: { activeMessageBatchId: 1 } }
+    );
     const docs = await messages
         .find({
-            session_id: new ObjectId(sessionId),
+            session_id: sessionObjectId,
+            ...(session?.activeMessageBatchId
+                ? { batch_id: session.activeMessageBatchId }
+                : {}),
         })
         .sort({ position: 1 })
         .toArray();
@@ -66,18 +77,17 @@ export async function loadUIMessageHistory(sessionId: string): Promise<UIMessage
 
 export async function replaceUIMessageHistory(sessionId: string, uiMessages: UIMessage[]) {
     const { db } = await connectToDatabase();
+    const sessions = db.collection<AIChatSessionDocument>(SESSIONS_COLLECTION);
     const messages = db.collection<StoredUIMessageDocument>(MESSAGES_COLLECTION);
     const sessionObjectId = new ObjectId(sessionId);
     const now = new Date();
-
-    await messages.deleteMany({
-        session_id: new ObjectId(sessionId),
-    });
+    const nextBatchId = new ObjectId().toHexString();
 
     if (uiMessages.length > 0) {
         await messages.insertMany(
             uiMessages.map((message, index) => ({
                 session_id: sessionObjectId,
+                batch_id: nextBatchId,
                 message_id: message.id,
                 position: index,
                 createdAt: now,
@@ -87,5 +97,33 @@ export async function replaceUIMessageHistory(sessionId: string, uiMessages: UIM
         );
     }
 
-    await touchSession(sessionId);
+    await sessions.updateOne(
+        { _id: sessionObjectId },
+        uiMessages.length > 0
+            ? {
+                $set: {
+                    activeMessageBatchId: nextBatchId,
+                    updatedAt: now,
+                },
+            }
+            : {
+                $unset: {
+                    activeMessageBatchId: '',
+                },
+                $set: {
+                    updatedAt: now,
+                },
+            }
+    );
+
+    await messages.deleteMany(
+        uiMessages.length > 0
+            ? {
+                session_id: sessionObjectId,
+                batch_id: { $ne: nextBatchId },
+            }
+            : {
+                session_id: sessionObjectId,
+            }
+    );
 }

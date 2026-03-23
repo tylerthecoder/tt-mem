@@ -208,6 +208,7 @@ export interface AIChatSessionDocument {
     user_id?: string;
     title?: string;
     formatVersion?: number;
+    activeMessageBatchId?: string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -217,6 +218,7 @@ export interface AIChatSession {
     user_id?: string;
     title?: string;
     formatVersion?: number;
+    activeMessageBatchId?: string;
     createdAt: Date;
     updatedAt: Date;
 }

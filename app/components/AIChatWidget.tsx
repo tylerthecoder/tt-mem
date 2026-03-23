@@ -31,6 +31,8 @@ type ToolUIPart = {
     errorText?: string;
     approval?: {
         id: string;
+        approved?: boolean;
+        reason?: string;
     };
 };
 
@@ -691,11 +693,12 @@ function renderToolPart(
     addToolApprovalResponse: (response: { id: string; approved: boolean; reason?: string }) => void | PromiseLike<void>,
 ) {
     const toolName = part.type.replace(/^tool-/, '');
+    const key = part.toolCallId || `${messageId}-${toolName}`;
 
     if (part.state === 'approval-requested' && part.approval?.id) {
         return (
             <ToolApprovalCard
-                key={part.toolCallId || `${messageId}-${toolName}`}
+                key={key}
                 toolName={toolName}
                 input={part.input}
                 approvalId={part.approval.id}
@@ -708,7 +711,7 @@ function renderToolPart(
     if (part.state === 'output-available') {
         return (
             <ToolResultCard
-                key={part.toolCallId || `${messageId}-${toolName}`}
+                key={key}
                 toolName={toolName}
                 output={part.output}
             />
@@ -718,17 +721,54 @@ function renderToolPart(
     if (part.state === 'output-error') {
         return (
             <ToolResultCard
-                key={part.toolCallId || `${messageId}-${toolName}`}
+                key={key}
                 toolName={toolName}
                 errorText={part.errorText || 'Tool execution failed'}
             />
         );
     }
 
+    if (part.state === 'approval-responded' && part.approval?.id) {
+        const wasApproved = part.approval.approved !== false;
+        return (
+            <ToolCardFrame
+                key={key}
+                tone={wasApproved ? 'neutral' : 'error'}
+                statusLabel={wasApproved ? 'Action approved' : 'Action rejected'}
+                toolName={toolName}
+                payload={part.input}
+                mode="input"
+            >
+                {part.approval.reason && (
+                    <div className="text-xs text-current/80">
+                        Reason: {part.approval.reason}
+                    </div>
+                )}
+            </ToolCardFrame>
+        );
+    }
+
+    if (part.state === 'output-denied' && part.approval?.id) {
+        return (
+            <ToolCardFrame
+                key={key}
+                tone="error"
+                statusLabel="Action rejected"
+                toolName={toolName}
+                payload={part.input}
+                mode="input"
+            >
+                <div className="text-xs text-current/80">
+                    {part.approval.reason || 'This action was rejected and was not executed.'}
+                </div>
+            </ToolCardFrame>
+        );
+    }
+
     if (part.state === 'input-available' || part.state === 'input-streaming') {
         return (
             <ToolCardFrame
-                key={part.toolCallId || `${messageId}-${toolName}`}
+                key={key}
                 tone="neutral"
                 statusLabel="Preparing action"
                 toolName={toolName}
