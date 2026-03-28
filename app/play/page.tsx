@@ -1,26 +1,17 @@
 'use client';
 
-import React, { Suspense } from 'react';
+import React, { Suspense, useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Button from '@/components/Button';
 import { useCardsForReview, useCreateReviewEventMutation } from '@/hooks/queryHooks';
-import { ReviewResult, Card } from '@/types';
+import { Card } from '@/types';
 import CardReviewer from '@/components/CardReviewer';
 import type { AnswerData } from '@/components/answer-modes/AnswerModeDispatcher';
 import Spinner from '@/components/Spinner';
 import PageHeader from '@/components/PageHeader';
 import { useAuth } from '@/context/useAuth';
-
-// Helper function to shuffle array (if not already in a utils file)
-function shuffleArray<T>(array: T[]): T[] {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-}
+import { getOrCreatePlayOrder, reshuffleAndSave, clearPlayOrder, type PlayOrderKey } from '@/lib/playOrder';
 
 function PlayPageContent() {
     const searchParams = useSearchParams();
@@ -35,66 +26,65 @@ function PlayPageContent() {
 
     const strategy = (strategyParam === 'random' || strategyParam === 'missedFirst') ? strategyParam : 'random';
     const limit = parseInt(limitParam || '20', 10);
-    const selectedDeckIds = deckIdsParam ? deckIdsParam.split(',').filter(id => id.trim() !== '') : undefined; // New: parse deckIds
+    const selectedDeckIds = deckIdsParam ? deckIdsParam.split(',').filter(id => id.trim() !== '') : undefined;
+
+    const orderKeyParams = useMemo<PlayOrderKey>(() => ({
+        strategy,
+        deckIds: selectedDeckIds,
+    }), [strategy, selectedDeckIds]);
 
     const { data: cards, isLoading: isLoadingCards, error: cardsError, refetch } = useCardsForReview({
-        // deckId: undefined, // Explicitly not using single deckId here when deckIds might be present
-        deckIds: selectedDeckIds, // New: pass selectedDeckIds
+        deckIds: selectedDeckIds,
         limit,
         strategy,
-        token: token ?? undefined, // Coalesce null to undefined
-        enabled: !isLoadingAuth && !!token, // Only enable if auth is loaded and token exists
+        token: token ?? undefined,
+        enabled: !isLoadingAuth && !!token,
     });
 
     const createReviewMutation = useCreateReviewEventMutation();
 
-    const [currentCardIndex, setCurrentCardIndex] = React.useState<number>(0);
-    const [reviewSequence, setReviewSequence] = React.useState<Card[]>([]);
+    const [currentCardIndex, setCurrentCardIndex] = useState<number>(0);
+    const [reviewSequence, setReviewSequence] = useState<Card[]>([]);
 
-    const desiredCardIndexFromParam = React.useMemo(() => {
+    const desiredCardIndexFromParam = useMemo(() => {
         if (!cardParamRaw) return 0;
         const parsed = parseInt(cardParamRaw, 10);
-        if (isNaN(parsed) || parsed < 1) {
-            return 0;
-        }
+        if (isNaN(parsed) || parsed < 1) return 0;
         return parsed - 1;
     }, [cardParamRaw]);
 
-    React.useEffect(() => {
+    useEffect(() => {
         if (cards && cards.length > 0) {
-            // The hook already implements strategies like missedFirst or random sampling.
-            // Shuffling here might be redundant if strategy is random, but okay for consistency or if strategy changes.
-            setReviewSequence(shuffleArray(cards));
+            setReviewSequence(getOrCreatePlayOrder(cards, orderKeyParams));
         } else {
             setReviewSequence([]);
             setCurrentCardIndex(0);
         }
-    }, [cards]);
+    }, [cards, orderKeyParams]);
 
-    React.useEffect(() => {
+    useEffect(() => {
         if (reviewSequence.length === 0) return;
         const normalizedIndex = Math.max(0, Math.min(reviewSequence.length - 1, desiredCardIndexFromParam));
         setCurrentCardIndex(prev => (prev === normalizedIndex ? prev : normalizedIndex));
     }, [desiredCardIndexFromParam, reviewSequence]);
 
-    React.useEffect(() => {
+    useEffect(() => {
         if (reviewSequence.length === 0) return;
         const totalCards = reviewSequence.length;
         const currentCardNumber = Math.min(currentCardIndex + 1, totalCards);
         const nextCardParam = String(currentCardNumber);
         if (cardParamRaw === nextCardParam) return;
 
-        const params = new URLSearchParams(searchParams.toString());
-        params.set('card', nextCardParam);
-        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        const p = new URLSearchParams(searchParams.toString());
+        p.set('card', nextCardParam);
+        router.replace(`${pathname}?${p.toString()}`, { scroll: false });
     }, [cardParamRaw, currentCardIndex, reviewSequence.length, router, pathname, searchParams]);
 
     const handleReview = (data: AnswerData) => {
-        if (!reviewSequence || reviewSequence.length === 0 || createReviewMutation.isPending) return;
-        const safeIndex = currentCardIndex;
-        if (safeIndex >= reviewSequence.length) return;
+        if (reviewSequence.length === 0 || createReviewMutation.isPending) return;
+        if (currentCardIndex >= reviewSequence.length) return;
 
-        const currentCard = reviewSequence[safeIndex];
+        const currentCard = reviewSequence[currentCardIndex];
 
         createReviewMutation.mutate({
             cardId: currentCard.id,
@@ -114,11 +104,14 @@ function PlayPageContent() {
     };
 
     const handlePlayAgain = () => {
-        const params = new URLSearchParams(searchParams.toString());
-        params.set('card', '1');
-        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-        refetch(); // Refetch cards based on the same criteria
+        clearPlayOrder(orderKeyParams);
         setCurrentCardIndex(0);
+
+        const p = new URLSearchParams(searchParams.toString());
+        p.set('card', '1');
+        router.replace(`${pathname}?${p.toString()}`, { scroll: false });
+
+        refetch();
     };
 
     if (isLoadingAuth || (isLoadingCards && !cards)) {
@@ -143,10 +136,10 @@ function PlayPageContent() {
         return <div className="text-center text-red-500 p-4 bg-red-50 rounded border border-red-200">Error loading cards: {(cardsError as Error).message || 'Unknown error'}.</div>;
     }
 
-    if (!isLoadingCards && (!reviewSequence || reviewSequence.length === 0)) {
+    if (!isLoadingCards && reviewSequence.length === 0) {
         return (
             <div className="text-center space-y-6 py-10">
-                <p className="text-lg text-gray-500">No cards found for this session.</p>
+                <p className="text-lg text-gray-500">No cards found for this play through.</p>
                 <p className="text-sm text-gray-400">
                     Try adjusting your strategy, selecting different decks, or adding more cards.
                 </p>
@@ -185,12 +178,10 @@ function PlayPageContent() {
 
     const currentCard = reviewSequence[currentCardIndex];
     if (!currentCard) {
-        // This case should ideally not be reached if reviewSequence is managed properly
         return <div className="text-center text-gray-500 py-10">Loading card...</div>;
     }
 
-    const sessionTitle = selectedDeckIds ? "Playing Selected Decks" : "Playing All Decks";
-
+    const sessionTitle = selectedDeckIds ? 'Playing Selected Decks' : 'Playing All Decks';
     const totalCards = reviewSequence.length;
 
     return (
@@ -220,7 +211,6 @@ function PlayPageContent() {
     );
 }
 
-// Wrap with Suspense because useSearchParams() needs it.
 export default function PlayPage() {
     return (
         <Suspense fallback={<div className="flex justify-center items-center min-h-[300px]"><Spinner /><p className="ml-2">Loading play session...</p></div>}>

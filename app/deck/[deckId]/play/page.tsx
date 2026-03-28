@@ -11,22 +11,12 @@ import {
     useMissedCardsForDeckInTimeframe
 } from '@/hooks/queryHooks';
 import { useAuth } from '@/context/useAuth';
-import { ReviewResult, Card } from '@/types';
+import { Card } from '@/types';
 import CardReviewer from '@/components/CardReviewer';
 import type { AnswerData } from '@/components/answer-modes/AnswerModeDispatcher';
 import Spinner from '@/components/Spinner';
 import PageHeader from '@/components/PageHeader';
-
-// Helper function to shuffle array
-function shuffleArray<T>(array: T[]): T[] {
-    if (!array || array.length === 0) return [];
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-}
+import { getOrCreatePlayOrder, reshuffleAndSave, type PlayOrderKey } from '@/lib/playOrder';
 
 function PlayDeckPageContent() {
     const params = useParams();
@@ -45,18 +35,22 @@ function PlayDeckPageContent() {
             timeframeDaysParsed = parsed;
         }
     }
+
     const desiredCardIndexFromParam = useMemo(() => {
         if (!cardParamRaw) return 0;
         const parsed = parseInt(cardParamRaw, 10);
-        if (isNaN(parsed) || parsed < 1) {
-            return 0;
-        }
+        if (isNaN(parsed) || parsed < 1) return 0;
         return parsed - 1;
     }, [cardParamRaw]);
 
+    const orderKeyParams = useMemo<PlayOrderKey>(() => ({
+        deckId,
+        strategy: playStrategy,
+        timeframe: timeframeDaysParsed,
+    }), [deckId, playStrategy, timeframeDaysParsed]);
+
     const { token } = useAuth();
 
-    // Conditional hooks
     const allCardsQuery = useDeckCards(deckId);
     const missedCardsQuery = useMissedCardsForDeckInTimeframe({
         deckId,
@@ -66,9 +60,7 @@ function PlayDeckPageContent() {
     });
 
     const cardsToUse = useMemo(() => {
-        if (playStrategy === 'missedInTimeframe') {
-            return missedCardsQuery.data;
-        }
+        if (playStrategy === 'missedInTimeframe') return missedCardsQuery.data;
         return allCardsQuery.data;
     }, [playStrategy, allCardsQuery.data, missedCardsQuery.data]);
 
@@ -83,13 +75,12 @@ function PlayDeckPageContent() {
 
     useEffect(() => {
         if (cardsToUse && cardsToUse.length > 0) {
-            const sequence = shuffleArray(cardsToUse);
-            setReviewSequence(sequence);
-        } else if (!isLoadingCards) { // Only reset if not loading and cardsToUse is empty/undefined
+            setReviewSequence(getOrCreatePlayOrder(cardsToUse, orderKeyParams));
+        } else if (!isLoadingCards) {
             setReviewSequence([]);
             setCurrentCardIndex(0);
         }
-    }, [cardsToUse, isLoadingCards]);
+    }, [cardsToUse, isLoadingCards, orderKeyParams]);
 
     useEffect(() => {
         if (reviewSequence.length === 0) return;
@@ -104,16 +95,15 @@ function PlayDeckPageContent() {
         const nextCardParam = String(currentCardNumber);
         if (cardParamRaw === nextCardParam) return;
 
-        const params = new URLSearchParams(searchParams.toString());
-        params.set('card', nextCardParam);
-        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+        const p = new URLSearchParams(searchParams.toString());
+        p.set('card', nextCardParam);
+        router.replace(`${pathname}?${p.toString()}`, { scroll: false });
     }, [cardParamRaw, currentCardIndex, reviewSequence.length, router, pathname, searchParams]);
 
     const handleReview = (data: AnswerData) => {
-        if (!reviewSequence || reviewSequence.length === 0 || deckId === undefined || createReviewMutation.isPending) return;
-        const safeIndex = currentCardIndex;
-        if (safeIndex >= reviewSequence.length) return;
-        const currentCard = reviewSequence[safeIndex];
+        if (reviewSequence.length === 0 || deckId === undefined || createReviewMutation.isPending) return;
+        if (currentCardIndex >= reviewSequence.length) return;
+        const currentCard = reviewSequence[currentCardIndex];
 
         createReviewMutation.mutate({
             cardId: currentCard.id,
@@ -133,15 +123,15 @@ function PlayDeckPageContent() {
     };
 
     const handlePlayAgain = () => {
-        if (cardsToUse && cardsToUse.length > 0) {
-            const params = new URLSearchParams(searchParams.toString());
-            params.set('card', '1');
-            router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-            const sequence = shuffleArray(cardsToUse);
-            setReviewSequence(sequence);
-        }
+        if (!cardsToUse || cardsToUse.length === 0) return;
+        const sequence = reshuffleAndSave(cardsToUse, orderKeyParams);
+        setReviewSequence(sequence);
         setCurrentCardIndex(0);
-    } // Play again re-shuffles the currently loaded set (all or missed)
+
+        const p = new URLSearchParams(searchParams.toString());
+        p.set('card', '1');
+        router.replace(`${pathname}?${p.toString()}`, { scroll: false });
+    };
 
     const isLoading = isLoadingCards || isLoadingDeck;
 
@@ -153,7 +143,7 @@ function PlayDeckPageContent() {
         return <div className="text-center text-red-500 p-4">Invalid timeframe specified for missed cards strategy.</div>;
     }
 
-    if (isLoading && (!deck)) { // Only wait for deck if cards are also loading or not yet determined
+    if (isLoading && !deck) {
         return (
             <div className="flex justify-center items-center py-10">
                 <Spinner /> <span className="ml-2 text-gray-500">Loading deck...</span>
@@ -165,8 +155,7 @@ function PlayDeckPageContent() {
         return <div className="text-center text-red-500 p-4 bg-red-50 rounded border border-red-200">Error loading cards: {(cardsError as Error).message || 'Unknown error'}.</div>;
     }
 
-    // After loading and error checks, if no cards, show specific message
-    if (!isLoading && (!reviewSequence || reviewSequence.length === 0)) {
+    if (!isLoading && reviewSequence.length === 0) {
         const emptyMessage = playStrategy === 'missedInTimeframe'
             ? `No cards found that were missed in the last ${timeframeDaysParsed} day(s).`
             : 'This deck is empty.';
@@ -180,10 +169,7 @@ function PlayDeckPageContent() {
         );
     }
 
-    // If reviewSequence is still undefined/empty after all checks (should be caught above, but as a fallback)
-    if (!reviewSequence) return <div className="text-center text-gray-500">Preparing cards...</div>;
-
-    if (currentCardIndex >= reviewSequence.length && reviewSequence.length > 0) { // Added check for length > 0 to avoid flash of finished when loading
+    if (currentCardIndex >= reviewSequence.length && reviewSequence.length > 0) {
         return (
             <div className="text-center space-y-6 py-10">
                 <p className="text-2xl font-semibold text-green-600">Deck finished!</p>
@@ -201,23 +187,17 @@ function PlayDeckPageContent() {
     }
 
     const currentCard = reviewSequence[currentCardIndex];
-    if (!currentCard && !isLoading) { // Only show loading card if not generally loading
-        return <div className="text-center text-gray-500">Loading card...</div>;
-    }
-    if (!currentCard && isLoading) { // If generally loading and no current card yet, show main spinner
+    if (!currentCard) {
         return (
             <div className="flex justify-center items-center py-10">
                 <Spinner /> <span className="ml-2 text-gray-500">Loading cards...</span>
             </div>
         );
     }
-    if (!currentCard) return null; // Final fallback
 
-
-    let strategyTitleSegment = '';
-    if (playStrategy === 'missedInTimeframe') {
-        strategyTitleSegment = `(Missed in last ${timeframeDaysParsed} days) `;
-    }
+    const strategyTitleSegment = playStrategy === 'missedInTimeframe'
+        ? `(Missed in last ${timeframeDaysParsed} days)`
+        : '';
 
     const totalCards = reviewSequence.length;
 
@@ -231,7 +211,7 @@ function PlayDeckPageContent() {
                     <>
                         {strategyTitleSegment && (
                             <span className="text-sm text-gray-400 whitespace-nowrap">
-                                {strategyTitleSegment.trim()}
+                                {strategyTitleSegment}
                             </span>
                         )}
                         <span className="text-sm font-medium text-gray-500 whitespace-nowrap">
