@@ -12,16 +12,20 @@ export interface PlayOrderKey {
     strategy: string;
     deckIds?: string[];
     timeframe?: number;
+    sessionId?: string;
 }
 
 function buildStorageKey(params: PlayOrderKey): string {
     if (params.deckId) {
         let key = `play-order:deck:${params.deckId}:${params.strategy}`;
         if (params.timeframe) key += `:${params.timeframe}`;
+        if (params.sessionId) key += `:${params.sessionId}`;
         return key;
     }
     const decksPart = params.deckIds ? [...params.deckIds].sort().join(',') : 'all';
-    return `play-order:global:${params.strategy}:${decksPart}`;
+    let key = `play-order:global:${params.strategy}:${decksPart}`;
+    if (params.sessionId) key += `:${params.sessionId}`;
+    return key;
 }
 
 /**
