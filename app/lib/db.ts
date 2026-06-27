@@ -1,22 +1,22 @@
 import { MongoClient } from 'mongodb';
 
-const MONGODB_URI = process.env.MONGODB_URI;
-const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME;
-
-if (!MONGODB_URI) {
-    throw new Error('Please define the MONGODB_URI environment variable inside .env');
-}
-if (!MONGODB_DB_NAME) {
-    throw new Error('Please define the MONGODB_DB_NAME environment variable inside .env');
-}
-
-// Assign checked env vars to local constants for type safety within functions
-const checkedMongoUri = MONGODB_URI;
-const checkedDbName = MONGODB_DB_NAME;
-
 // Cached connection promise
 let cachedClient: MongoClient | null = null;
 let cachedDbPromise: Promise<{ db: ReturnType<MongoClient['db']>, client: MongoClient }> | null = null;
+
+function getMongoConfig() {
+    const mongoUri = process.env.MONGODB_URI;
+    const dbName = process.env.MONGODB_DB_NAME;
+
+    if (!mongoUri) {
+        throw new Error('Please define the MONGODB_URI environment variable inside .env');
+    }
+    if (!dbName) {
+        throw new Error('Please define the MONGODB_DB_NAME environment variable inside .env');
+    }
+
+    return { mongoUri, dbName };
+}
 
 /**
  * Connects to the MongoDB database.
@@ -30,13 +30,15 @@ export async function connectToDatabase() {
         return cachedDbPromise;
     }
 
+    const { mongoUri, dbName } = getMongoConfig();
+
     if (!cachedClient) {
-        cachedClient = new MongoClient(checkedMongoUri);
+        cachedClient = new MongoClient(mongoUri);
     }
 
     // Store the promise to avoid race conditions
     cachedDbPromise = cachedClient.connect().then(client => {
-        const db = client.db(checkedDbName);
+        const db = client.db(dbName);
         return { db, client };
     }).catch(err => {
         // Reset cache on connection error

@@ -4,17 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Commands
 
-- **Development server**: `npm run dev`
-- **Build**: `npm run build`
-- **Production server**: `npm start`
-- **Linting**: `npm run lint`
+- **Install dependencies**: `bun install`
+- **Development server**: `bun run dev`
+- **Build**: `bun run build`
+- **Production server**: `bun run start`
+- **Linting**: `bun run lint`
 
 ## Architecture Overview
 
-This is a Next.js 14 application using the App Router with TypeScript, MongoDB, and AI integration for flashcard learning.
+This is a Next.js 16 application using the App Router with TypeScript, MongoDB, and AI integration for flashcard learning.
 
 ### Core Technologies
-- **Frontend**: Next.js 14 with App Router, React 19, TailwindCSS 4
+- **Frontend**: Next.js 16 with App Router, React 19, TailwindCSS 4
 - **Backend**: Next.js Server Actions for API logic
 - **Database**: MongoDB with connection pooling via `app/lib/db.ts`
 - **State Management**: TanStack Query for server state, React Context for auth
