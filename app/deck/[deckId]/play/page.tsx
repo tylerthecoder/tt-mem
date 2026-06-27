@@ -27,6 +27,7 @@ function PlayDeckPageContent() {
     const playStrategy = (searchParams.get('strategy') ?? undefined) === 'missedInTimeframe' ? 'missedInTimeframe' : 'all';
     const timeframeParam = searchParams.get('timeframe') ?? undefined;
     const cardParamRaw = searchParams.get('card');
+    const sessionId = searchParams.get('session') ?? undefined;
 
     let timeframeDaysParsed: number | undefined = undefined;
     if (timeframeParam) {
@@ -47,7 +48,8 @@ function PlayDeckPageContent() {
         deckId,
         strategy: playStrategy,
         timeframe: timeframeDaysParsed,
-    }), [deckId, playStrategy, timeframeDaysParsed]);
+        sessionId,
+    }), [deckId, playStrategy, timeframeDaysParsed, sessionId]);
 
     const { token } = useAuth();
 
@@ -70,35 +72,39 @@ function PlayDeckPageContent() {
     const createReviewMutation = useCreateReviewEventMutation();
     const { data: deck, isLoading: isLoadingDeck } = useDeck(deckId);
 
-    const [currentCardIndex, setCurrentCardIndex] = useState<number>(0);
+    const [currentCardIndex, setCurrentCardIndex] = useState<number>(desiredCardIndexFromParam);
     const [reviewSequence, setReviewSequence] = useState<Card[]>([]);
 
     useEffect(() => {
+        if (!deckId || sessionId) return;
+
+        const p = new URLSearchParams(searchParams.toString());
+        p.set('session', typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : String(Date.now()));
+        p.set('card', '1');
+        router.replace(`${pathname}?${p.toString()}`, { scroll: false });
+    }, [deckId, sessionId, router, pathname, searchParams]);
+
+    useEffect(() => {
+        if (!sessionId) return;
         if (cardsToUse && cardsToUse.length > 0) {
             setReviewSequence(getOrCreatePlayOrder(cardsToUse, orderKeyParams));
         } else if (!isLoadingCards) {
             setReviewSequence([]);
             setCurrentCardIndex(0);
         }
-    }, [cardsToUse, isLoadingCards, orderKeyParams]);
+    }, [cardsToUse, isLoadingCards, orderKeyParams, sessionId]);
 
     useEffect(() => {
         if (reviewSequence.length === 0) return;
-        const normalizedIndex = Math.max(0, Math.min(reviewSequence.length - 1, desiredCardIndexFromParam));
+        const normalizedIndex = Math.max(0, Math.min(reviewSequence.length, desiredCardIndexFromParam));
         setCurrentCardIndex(prev => (prev === normalizedIndex ? prev : normalizedIndex));
-    }, [desiredCardIndexFromParam, reviewSequence]);
-
-    useEffect(() => {
-        if (reviewSequence.length === 0) return;
-        const totalCards = reviewSequence.length;
-        const currentCardNumber = Math.min(currentCardIndex + 1, totalCards);
-        const nextCardParam = String(currentCardNumber);
-        if (cardParamRaw === nextCardParam) return;
+        const normalizedCardParam = String(normalizedIndex + 1);
+        if (cardParamRaw === normalizedCardParam) return;
 
         const p = new URLSearchParams(searchParams.toString());
-        p.set('card', nextCardParam);
+        p.set('card', normalizedCardParam);
         router.replace(`${pathname}?${p.toString()}`, { scroll: false });
-    }, [cardParamRaw, currentCardIndex, reviewSequence.length, router, pathname, searchParams]);
+    }, [cardParamRaw, desiredCardIndexFromParam, reviewSequence.length, router, pathname, searchParams]);
 
     const handleReview = (data: AnswerData) => {
         if (reviewSequence.length === 0 || deckId === undefined || createReviewMutation.isPending) return;
@@ -114,7 +120,12 @@ function PlayDeckPageContent() {
             user_answer: data.user_answer,
         }, {
             onSuccess: () => {
-                setCurrentCardIndex(currentCardIndex + 1);
+                const nextCardIndex = currentCardIndex + 1;
+                setCurrentCardIndex(nextCardIndex);
+
+                const p = new URLSearchParams(searchParams.toString());
+                p.set('card', String(nextCardIndex + 1));
+                router.replace(`${pathname}?${p.toString()}`, { scroll: false });
             },
             onError: (err) => {
                 alert(`Failed to record review: ${err.message}`);
@@ -124,11 +135,19 @@ function PlayDeckPageContent() {
 
     const handlePlayAgain = () => {
         if (!cardsToUse || cardsToUse.length === 0) return;
-        const sequence = reshuffleAndSave(cardsToUse, orderKeyParams);
+
+        const nextSessionId = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : String(Date.now());
+        const nextOrderKeyParams = {
+            ...orderKeyParams,
+            sessionId: nextSessionId,
+        };
+        const sequence = reshuffleAndSave(cardsToUse, nextOrderKeyParams);
+
         setReviewSequence(sequence);
         setCurrentCardIndex(0);
 
         const p = new URLSearchParams(searchParams.toString());
+        p.set('session', nextSessionId);
         p.set('card', '1');
         router.replace(`${pathname}?${p.toString()}`, { scroll: false });
     };
@@ -143,7 +162,7 @@ function PlayDeckPageContent() {
         return <div className="text-center text-red-500 p-4">Invalid timeframe specified for missed cards strategy.</div>;
     }
 
-    if (isLoading && !deck) {
+    if (!sessionId || (isLoading && !deck)) {
         return (
             <div className="flex justify-center items-center py-10">
                 <Spinner /> <span className="ml-2 text-gray-500">Loading deck...</span>

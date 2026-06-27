@@ -11,7 +11,7 @@ import type { AnswerData } from '@/components/answer-modes/AnswerModeDispatcher'
 import Spinner from '@/components/Spinner';
 import PageHeader from '@/components/PageHeader';
 import { useAuth } from '@/context/useAuth';
-import { getOrCreatePlayOrder, reshuffleAndSave, clearPlayOrder, type PlayOrderKey } from '@/lib/playOrder';
+import { getOrCreatePlayOrder, clearPlayOrder, type PlayOrderKey } from '@/lib/playOrder';
 
 function PlayPageContent() {
     const searchParams = useSearchParams();
@@ -26,7 +26,9 @@ function PlayPageContent() {
 
     const strategy = (strategyParam === 'random' || strategyParam === 'missedFirst') ? strategyParam : 'random';
     const limit = parseInt(limitParam || '20', 10);
-    const selectedDeckIds = deckIdsParam ? deckIdsParam.split(',').filter(id => id.trim() !== '') : undefined;
+    const selectedDeckIds = useMemo(() => {
+        return deckIdsParam ? deckIdsParam.split(',').filter(id => id.trim() !== '') : undefined;
+    }, [deckIdsParam]);
 
     const orderKeyParams = useMemo<PlayOrderKey>(() => ({
         strategy,
@@ -41,17 +43,17 @@ function PlayPageContent() {
         enabled: !isLoadingAuth && !!token,
     });
 
-    const createReviewMutation = useCreateReviewEventMutation();
-
-    const [currentCardIndex, setCurrentCardIndex] = useState<number>(0);
-    const [reviewSequence, setReviewSequence] = useState<Card[]>([]);
-
     const desiredCardIndexFromParam = useMemo(() => {
         if (!cardParamRaw) return 0;
         const parsed = parseInt(cardParamRaw, 10);
         if (isNaN(parsed) || parsed < 1) return 0;
         return parsed - 1;
     }, [cardParamRaw]);
+
+    const createReviewMutation = useCreateReviewEventMutation();
+
+    const [currentCardIndex, setCurrentCardIndex] = useState<number>(desiredCardIndexFromParam);
+    const [reviewSequence, setReviewSequence] = useState<Card[]>([]);
 
     useEffect(() => {
         if (cards && cards.length > 0) {
@@ -64,21 +66,15 @@ function PlayPageContent() {
 
     useEffect(() => {
         if (reviewSequence.length === 0) return;
-        const normalizedIndex = Math.max(0, Math.min(reviewSequence.length - 1, desiredCardIndexFromParam));
+        const normalizedIndex = Math.max(0, Math.min(reviewSequence.length, desiredCardIndexFromParam));
         setCurrentCardIndex(prev => (prev === normalizedIndex ? prev : normalizedIndex));
-    }, [desiredCardIndexFromParam, reviewSequence]);
-
-    useEffect(() => {
-        if (reviewSequence.length === 0) return;
-        const totalCards = reviewSequence.length;
-        const currentCardNumber = Math.min(currentCardIndex + 1, totalCards);
-        const nextCardParam = String(currentCardNumber);
-        if (cardParamRaw === nextCardParam) return;
+        const normalizedCardParam = String(normalizedIndex + 1);
+        if (cardParamRaw === normalizedCardParam) return;
 
         const p = new URLSearchParams(searchParams.toString());
-        p.set('card', nextCardParam);
+        p.set('card', normalizedCardParam);
         router.replace(`${pathname}?${p.toString()}`, { scroll: false });
-    }, [cardParamRaw, currentCardIndex, reviewSequence.length, router, pathname, searchParams]);
+    }, [cardParamRaw, desiredCardIndexFromParam, reviewSequence.length, router, pathname, searchParams]);
 
     const handleReview = (data: AnswerData) => {
         if (reviewSequence.length === 0 || createReviewMutation.isPending) return;
@@ -95,7 +91,12 @@ function PlayPageContent() {
             user_answer: data.user_answer,
         }, {
             onSuccess: () => {
-                setCurrentCardIndex(currentCardIndex + 1);
+                const nextCardIndex = currentCardIndex + 1;
+                setCurrentCardIndex(nextCardIndex);
+
+                const p = new URLSearchParams(searchParams.toString());
+                p.set('card', String(nextCardIndex + 1));
+                router.replace(`${pathname}?${p.toString()}`, { scroll: false });
             },
             onError: (err) => {
                 alert(`Failed to record review: ${err.message}`);
